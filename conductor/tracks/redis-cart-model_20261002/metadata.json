@@ -1,0 +1,8 @@
+{
+  "track_id": "redis-cart-model_20261002",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-10-02T16:51:33Z",
+  "updated_at": "2026-10-02T16:51:33Z",
+  "description": "Design the Redis cart data model (line items) and drop the generated Postgres layer"
+}
