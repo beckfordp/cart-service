@@ -1,0 +1,28 @@
+Phase 1 verification report: Redesign domain model & CartStore algebra (redis-cart-model_20261002)
+
+Automated tests: sbt scalafmtCheck test - 39 passed, 0 failed, scalafmt clean.
+
+Manual verification: run via committed script (prompt-off mode -
+.claude/prompt-off), not an interactive walkthrough.
+
+Command: ./scripts/verify-cart-redesign.sh
+
+Steps and outcomes:
+1. sbt run - cart-service boots cleanly with the new CartServiceConfig (no
+   PostgresConfig field anymore) and no database dependency at all (temporary
+   in-memory CartStore). /health returns 200.
+2. POST /carts - 201, creates an empty cart.
+3. GET /carts/{id} - 200, returns the cart.
+4. PATCH /carts/{id} and PUT /carts/{id} - 405 Method Not Allowed (path still
+   matches GET/DELETE, but the methods are gone - confirms the whole-cart-update
+   endpoints were actually dropped from the running service, not just untested).
+5. DELETE /carts/{id} - 204, then a subsequent GET returns 404.
+
+All checks passed. One script-authoring correction made during this run: the
+script originally expected 404 for the dropped PATCH/PUT methods; http4s/tapir
+correctly returns 405 for a matched path with an unsupported method, so the
+script's expectation was fixed to 405 - not a product defect.
+
+Confirmation: equivalent to explicit user "yes" - prompt-off mode substitutes
+a deterministic, committed script for the interactive manual-verification
+question per the Phase Completion protocol.
