@@ -2,14 +2,14 @@
 
 ## Phase 1: Redesign domain model & CartStore algebra, remove generated Postgres implementation
 
-- [ ] Task: Write failing CartStoreSuite tests for the new line-item algebra: create() returns an empty cart; addItem on a new sku inserts it; addItem on an existing sku increments its quantity; removeItem deletes a sku entirely; setQuantity with a positive value sets it exactly; setQuantity with 0 or negative removes the sku; get on a missing cart returns None; delete returns true/false correctly; ping returns true
-- [ ] Task: Redefine `Cart` (id, items: Map[String, Int], createdAt, updatedAt) and the `CartStore[F]` trait (create/get/addItem/removeItem/setQuantity/delete/ping), removing every `/* codegen:fields:* */` placeholder
-- [ ] Task: Reimplement `CartStore.inMemory` against the new trait, backed by `Ref[F, Map[String, Cart]]`
-- [ ] Task: Run tests, confirm CartStoreSuite green
-- [ ] Task: Delete the generated Postgres implementation: `CartStore.postgres`, `Migrations.scala`, `MigrationsSuite`, `CartStorePostgresSuite`, the Flyway migration SQL, and `PostgresConfig` from `CartServiceConfig.scala` (+ its test fixtures)
-- [ ] Task: Remove skunk/flyway/flyway-database-postgresql/postgresql-JDBC dependencies from `build.sbt`
-- [ ] Task: Trim `CartRoutes`/`CartRoutesSuite` to the operations the new store still supports: drop the PATCH/PUT (`UpdateCartRequest`) endpoints entirely (no generic whole-cart "update" exists against a line-item model) — create/get/delete stay as a thin resource shell; add/remove-item HTTP endpoints remain US-2.1's job, not added here
-- [ ] Task: Run the full test suite, confirm green
+- [x] Task: Write failing CartStoreSuite tests for the new line-item algebra: create() returns an empty cart; addItem on a new sku inserts it; addItem on an existing sku increments its quantity; removeItem deletes a sku entirely; setQuantity with a positive value sets it exactly; setQuantity with 0 or negative removes the sku; get on a missing cart returns None; delete returns true/false correctly; ping returns true `f2233ec`
+- [x] Task: Redefine `Cart` (id, items: Map[String, Int], createdAt, updatedAt) and the `CartStore[F]` trait (create/get/addItem/removeItem/setQuantity/delete/ping), removing every `/* codegen:fields:* */` placeholder `f2233ec`
+- [x] Task: Reimplement `CartStore.inMemory` against the new trait, backed by `Ref[F, Map[String, Cart]]` `f2233ec`
+- [x] Task: Run tests, confirm CartStoreSuite green `f2233ec` - 18 passed, 0 failed
+- [x] Task: Delete the generated Postgres implementation: `CartStore.postgres`, `Migrations.scala`, `MigrationsSuite`, `CartStorePostgresSuite`, the Flyway migration SQL, and `PostgresConfig` from `CartServiceConfig.scala` (+ its test fixtures) `f2233ec`
+- [x] Task: Remove skunk/flyway/flyway-database-postgresql/postgresql-JDBC dependencies from `build.sbt` `f2233ec` - also removed the otel4s `dependencyOverrides` block, which existed only to resolve Skunk's own otel4s conflict
+- [x] Task: Trim `CartRoutes`/`CartRoutesSuite` to the operations the new store still supports: drop the PATCH/PUT (`UpdateCartRequest`) endpoints entirely (no generic whole-cart "update" exists against a line-item model) — create/get/delete stay as a thin resource shell; add/remove-item HTTP endpoints remain US-2.1's job, not added here `f2233ec` - also dropped `CreateCartRequest`'s now-pointless body (`create()` takes no params); required a matching update to `Main.scala` (removed the `Migrations.run` call and `CartStore.postgres` wiring, temporarily using `CartStore.inMemory` pending Phase 2/3) and to `HealthRoutesSuite`/`CartDocsSuite`'s stub stores - not called out as separate plan lines but necessary for compilation
+- [x] Task: Run the full test suite, confirm green `f2233ec` - 39 passed, 0 failed; `sbt scalafmtCheck test` clean
 - [ ] Task: Conductor - User Manual Verification 'Redesign domain model & CartStore algebra' (Protocol in workflow.md)
 
 ## Phase 2: Redis-backed CartStore implementation
