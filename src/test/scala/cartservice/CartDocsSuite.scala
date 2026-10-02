@@ -18,7 +18,6 @@ class CartDocsSuite extends CatsEffectSuite {
       endpoint = CartRoutes.serverEndpoint[IO](store, NoOpLogger[IO])
       routes = Docs.routes[IO]("Cart Service", "1.0", List(endpoint))
       request = Request[IO](Method.POST, uri"/carts")
-        .withEntity(CreateCartRequest(/* codegen:fields:TEST_CREATE_REQUEST_ARGS */))
       response <- routes.orNotFound.run(request)
       entity <- response.as[CartResponse]
       docsResponse <- routes.orNotFound.run(

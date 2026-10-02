@@ -11,13 +11,6 @@ class CartServiceConfigSuite extends CatsEffectSuite {
       |port = 8080
       |metrics-port = 9090
       |service-name = "cart-service"
-      |postgres {
-      |  host = "localhost"
-      |  port = 5432
-      |  database = "cart"
-      |  user = "cart"
-      |  password = "cart"
-      |}
       |""".stripMargin
 
   test("loads a fully-specified config") {
@@ -29,35 +22,22 @@ class CartServiceConfigSuite extends CatsEffectSuite {
         CartServiceConfig(
           port = 8080,
           metricsPort = 9090,
-          serviceName = "cart-service",
-          postgres = PostgresConfig(
-            host = "localhost",
-            port = 5432,
-            database = "cart",
-            user = "cart",
-            password = "cart"
-          )
+          serviceName = "cart-service"
         )
       )
     )
   }
 
   test("fails to load when a required field is missing") {
-    val missingPassword =
+    val missingServiceName =
       """
         |port = 8080
         |metrics-port = 9090
-        |postgres {
-        |  host = "localhost"
-        |  port = 5432
-        |  database = "cart"
-        |  user = "cart"
-        |}
         |""".stripMargin
 
     assert(
       ConfigSource
-        .string(missingPassword)
+        .string(missingServiceName)
         .load[CartServiceConfig]
         .isLeft
     )
@@ -68,16 +48,6 @@ class CartServiceConfigSuite extends CatsEffectSuite {
       assertEquals(config.port, 8080)
       assertEquals(config.metricsPort, 9090)
       assertEquals(config.serviceName, "cart-service")
-      assertEquals(
-        config.postgres,
-        PostgresConfig(
-          "localhost",
-          5432,
-          "cart",
-          "cart",
-          "cart"
-        )
-      )
     }
   }
 }

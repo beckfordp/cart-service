@@ -3,19 +3,10 @@ package cartservice
 import cats.effect.Sync
 import pureconfig.{ConfigReader, ConfigSource}
 
-final case class PostgresConfig(
-    host: String,
-    port: Int,
-    database: String,
-    user: String,
-    password: String
-) derives ConfigReader
-
 final case class CartServiceConfig(
     port: Int,
     metricsPort: Int,
-    serviceName: String,
-    postgres: PostgresConfig
+    serviceName: String
 ) derives ConfigReader
 
 object CartServiceConfig {

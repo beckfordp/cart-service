@@ -9,12 +9,15 @@ class HealthRoutesSuite extends CatsEffectSuite {
 
   private val readyStore: CartStore[IO] =
     new CartStore[IO] {
-      def create(/* codegen:fields:CREATE_PARAMS */): IO[Cart] =
-        IO.raiseError(new NotImplementedError())
+      def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
       def get(id: String): IO[Option[Cart]] = IO.pure(None)
-      def update(
-          id: String
-          /* codegen:fields:UPDATE_PARAMS */
+      def addItem(id: String, sku: String, quantity: Int): IO[Option[Cart]] =
+        IO.pure(None)
+      def removeItem(id: String, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def setQuantity(
+          id: String,
+          sku: String,
+          quantity: Int
       ): IO[Option[Cart]] = IO.pure(None)
       def delete(id: String): IO[Boolean] = IO.pure(false)
       def ping: IO[Boolean] = IO.pure(true)
@@ -22,12 +25,15 @@ class HealthRoutesSuite extends CatsEffectSuite {
 
   private val notReadyStore: CartStore[IO] =
     new CartStore[IO] {
-      def create(/* codegen:fields:CREATE_PARAMS */): IO[Cart] =
-        IO.raiseError(new NotImplementedError())
+      def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
       def get(id: String): IO[Option[Cart]] = IO.pure(None)
-      def update(
-          id: String
-          /* codegen:fields:UPDATE_PARAMS */
+      def addItem(id: String, sku: String, quantity: Int): IO[Option[Cart]] =
+        IO.pure(None)
+      def removeItem(id: String, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def setQuantity(
+          id: String,
+          sku: String,
+          quantity: Int
       ): IO[Option[Cart]] = IO.pure(None)
       def delete(id: String): IO[Boolean] = IO.pure(false)
       def ping: IO[Boolean] = IO.pure(false)

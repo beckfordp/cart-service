@@ -13,21 +13,8 @@ import sttp.tapir.json.circe._
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
-final case class CreateCartRequest( /* codegen:fields:CREATE_PARAMS */ )
-
-object CreateCartRequest {
-  implicit val codec: Codec[CreateCartRequest] = deriveCodec
-}
-
-final case class UpdateCartRequest( /* codegen:fields:UPDATE_PARAMS */ )
-
-object UpdateCartRequest {
-  implicit val codec: Codec[UpdateCartRequest] = deriveCodec
-}
-
 final case class CartResponse(
     id: String,
-    // codegen:fields:CASE_CLASS_FIELD
     createdAt: java.time.Instant,
     updatedAt: java.time.Instant
 )
@@ -36,12 +23,7 @@ object CartResponse {
   implicit val codec: Codec[CartResponse] = deriveCodec
 
   def apply(entity: Cart): CartResponse =
-    CartResponse(
-      entity.id,
-      /* codegen:fields:RESPONSE_APPLY_ARGS */
-      entity.createdAt,
-      entity.updatedAt
-    )
+    CartResponse(entity.id, entity.createdAt, entity.updatedAt)
 }
 
 final case class ErrorResponse(error: String)
@@ -52,15 +34,10 @@ object ErrorResponse {
 
 object CartRoutes {
 
-  private val createCartEndpoint: PublicEndpoint[
-    CreateCartRequest,
-    Unit,
-    CartResponse,
-    Any
-  ] =
+  private val createCartEndpoint
+      : PublicEndpoint[Unit, Unit, CartResponse, Any] =
     endpoint.post
       .in("carts")
-      .in(jsonBody[CreateCartRequest])
       .out(statusCode(StatusCode.Created))
       .out(jsonBody[CartResponse])
 
@@ -80,30 +57,6 @@ object CartRoutes {
       .out(jsonBody[CartResponse])
       .errorOut(notFoundOutput)
 
-  private val updateCartEndpoint: PublicEndpoint[
-    (String, UpdateCartRequest),
-    CartError,
-    CartResponse,
-    Any
-  ] =
-    endpoint.patch
-      .in("carts" / path[String]("id"))
-      .in(jsonBody[UpdateCartRequest])
-      .out(jsonBody[CartResponse])
-      .errorOut(notFoundOutput)
-
-  private val replaceCartEndpoint: PublicEndpoint[
-    (String, UpdateCartRequest),
-    CartError,
-    CartResponse,
-    Any
-  ] =
-    endpoint.put
-      .in("carts" / path[String]("id"))
-      .in(jsonBody[UpdateCartRequest])
-      .out(jsonBody[CartResponse])
-      .errorOut(notFoundOutput)
-
   private val deleteCartEndpoint: PublicEndpoint[String, CartError, Unit, Any] =
     endpoint.delete
       .in("carts" / path[String]("id"))
@@ -114,7 +67,7 @@ object CartRoutes {
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
-    createCartEndpoint.serverLogicSuccess[F] { req =>
+    createCartEndpoint.serverLogicSuccess[F] { _ =>
       for {
         _ <- logger.info(
           Map(
@@ -123,7 +76,7 @@ object CartRoutes {
           )
         )("Received request")
         entity <- store
-          .create( /* codegen:fields:CREATE_CALL_ARGS */ )
+          .create()
           .onError { case error =>
             logger.error(Map.empty, error)("Persisting the cart failed")
           }
@@ -157,56 +110,6 @@ object CartRoutes {
       } yield result
     }
 
-  /** Shared handler for `PATCH` (partial update) and `PUT` (full replace) —
-    * both call `CartStore.update` with the same required update body; only the
-    * logged HTTP method differs.
-    */
-  private def updateLogic[F[_]: Async](
-      store: CartStore[F],
-      logger: StructuredLogger[F],
-      httpMethod: String
-  )(
-      id: String,
-      req: UpdateCartRequest
-  ): F[Either[CartError, CartResponse]] =
-    for {
-      _ <- logger.info(
-        Map(
-          "method" -> httpMethod,
-          "path" -> s"/carts/$id",
-          "cart_id" -> id
-        )
-      )("Received request")
-      result <- store
-        .update(id /* codegen:fields:UPDATE_CALL_ARGS */ )
-        .flatMap {
-          case Some(entity) =>
-            logger
-              .info(Map("cart_id" -> id))("Request completed")
-              .as(Right(CartResponse(entity)))
-          case None =>
-            logger
-              .warn(Map("cart_id" -> id))("Cart not found")
-              .as(Left(CartNotFound))
-        }
-    } yield result
-
-  def updateCartServerEndpoint[F[_]: Async](
-      store: CartStore[F],
-      logger: StructuredLogger[F]
-  ): ServerEndpoint[Any, F] =
-    updateCartEndpoint.serverLogic[F] { case (id, req) =>
-      updateLogic(store, logger, "PATCH")(id, req)
-    }
-
-  def replaceCartServerEndpoint[F[_]: Async](
-      store: CartStore[F],
-      logger: StructuredLogger[F]
-  ): ServerEndpoint[Any, F] =
-    replaceCartEndpoint.serverLogic[F] { case (id, req) =>
-      updateLogic(store, logger, "PUT")(id, req)
-    }
-
   def deleteCartServerEndpoint[F[_]: Async](
       store: CartStore[F],
       logger: StructuredLogger[F]
@@ -237,8 +140,6 @@ object CartRoutes {
       List(
         serverEndpoint(store, logger),
         getCartServerEndpoint(store, logger),
-        updateCartServerEndpoint(store, logger),
-        replaceCartServerEndpoint(store, logger),
         deleteCartServerEndpoint(store, logger)
       )
     )

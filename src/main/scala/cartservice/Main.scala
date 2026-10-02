@@ -1,6 +1,6 @@
 package cartservice
 
-import cats.effect.{IO, IOApp}
+import cats.effect.{IO, IOApp, Resource}
 import com.comcast.ip4s._
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits._
@@ -19,7 +19,6 @@ object Main extends IOApp.Simple {
           s"Invalid cart-service port: ${config.port}"
         )
       )
-      _ <- Migrations.run[IO](config.postgres)
       _ <- Tracing.console[IO](config.serviceName).use { tracer =>
         Metrics.oteljava[IO](config.serviceName, config.metricsPort).use {
           meter =>
@@ -31,15 +30,15 @@ object Main extends IOApp.Simple {
                   "metrics_port" -> config.metricsPort.toString
                 )
               )("cart-service starting")
-              _ <- CartStore.postgres[IO](config.postgres, meter).use { store =>
+              // Temporary: in-memory store pending the Redis-backed CartStore
+              // landing in this track's own Phase 2/3.
+              _ <- Resource.eval(CartStore.inMemory[IO]).use { store =>
                 val docsRoutes = Docs.routes[IO](
                   "Cart Service",
                   "1.0",
                   List(
                     CartRoutes.serverEndpoint[IO](store, logger),
                     CartRoutes.getCartServerEndpoint[IO](store, logger),
-                    CartRoutes.updateCartServerEndpoint[IO](store, logger),
-                    CartRoutes.replaceCartServerEndpoint[IO](store, logger),
                     CartRoutes.deleteCartServerEndpoint[IO](store, logger),
                     HealthRoutes.healthServerEndpoint[IO],
                     HealthRoutes.readyServerEndpoint[IO](store)
