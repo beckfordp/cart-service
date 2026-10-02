@@ -1,6 +1,6 @@
 # Implementation Plan: Design the Redis cart data model and drop the generated Postgres layer
 
-## Phase 1: Redesign domain model & CartStore algebra, remove generated Postgres implementation
+## Phase 1: Redesign domain model & CartStore algebra, remove generated Postgres implementation [checkpoint: 6160fe3]
 
 - [x] Task: Write failing CartStoreSuite tests for the new line-item algebra: create() returns an empty cart; addItem on a new sku inserts it; addItem on an existing sku increments its quantity; removeItem deletes a sku entirely; setQuantity with a positive value sets it exactly; setQuantity with 0 or negative removes the sku; get on a missing cart returns None; delete returns true/false correctly; ping returns true `f2233ec`
 - [x] Task: Redefine `Cart` (id, items: Map[String, Int], createdAt, updatedAt) and the `CartStore[F]` trait (create/get/addItem/removeItem/setQuantity/delete/ping), removing every `/* codegen:fields:* */` placeholder `f2233ec`
@@ -10,7 +10,7 @@
 - [x] Task: Remove skunk/flyway/flyway-database-postgresql/postgresql-JDBC dependencies from `build.sbt` `f2233ec` - also removed the otel4s `dependencyOverrides` block, which existed only to resolve Skunk's own otel4s conflict
 - [x] Task: Trim `CartRoutes`/`CartRoutesSuite` to the operations the new store still supports: drop the PATCH/PUT (`UpdateCartRequest`) endpoints entirely (no generic whole-cart "update" exists against a line-item model) — create/get/delete stay as a thin resource shell; add/remove-item HTTP endpoints remain US-2.1's job, not added here `f2233ec` - also dropped `CreateCartRequest`'s now-pointless body (`create()` takes no params); required a matching update to `Main.scala` (removed the `Migrations.run` call and `CartStore.postgres` wiring, temporarily using `CartStore.inMemory` pending Phase 2/3) and to `HealthRoutesSuite`/`CartDocsSuite`'s stub stores - not called out as separate plan lines but necessary for compilation
 - [x] Task: Run the full test suite, confirm green `f2233ec` - 39 passed, 0 failed; `sbt scalafmtCheck test` clean
-- [ ] Task: Conductor - User Manual Verification 'Redesign domain model & CartStore algebra' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Redesign domain model & CartStore algebra' (Protocol in workflow.md) `6160fe3` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 ## Phase 2: Redis-backed CartStore implementation
 
