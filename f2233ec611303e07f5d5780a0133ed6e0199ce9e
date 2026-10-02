@@ -1,0 +1,41 @@
+Task: Redesign Cart as line items, remove generated Postgres implementation (Phase 1 of redis-cart-model_20261002)
+
+Summary: Replaced the generated Cart/CartStore (id/createdAt/updatedAt only, every
+field-substitution point an unfilled codegen placeholder) with a hand-designed
+line-item model: Cart(id, items: Map[String, Int], createdAt, updatedAt) and a
+CartStore[F] algebra (create/get/addItem/removeItem/setQuantity/delete/ping). Deleted
+the entire generated Postgres implementation (CartStore.postgres, Migrations.scala,
+MigrationsSuite, CartStorePostgresSuite, the Flyway migration SQL, PostgresConfig) and
+its skunk/flyway/flyway-database-postgresql/postgresql-JDBC build.sbt dependencies,
+plus the otel4s dependencyOverrides block that existed only to resolve Skunk's otel4s
+conflict. Trimmed CartRoutes to drop the PATCH/PUT whole-cart-update endpoints (no
+generic "update" exists against a line-item model) and removed the now-pointless
+CreateCartRequest body (create() takes no params) - create/get/delete remain a thin
+resource shell; add/remove-item HTTP endpoints are the cart-items_20261002 track's job.
+Main.scala temporarily wires CartStore.inMemory pending this track's own Phase 2/3
+Redis implementation.
+
+Files created/modified:
+- src/main/scala/cartservice/CartStore.scala (rewritten)
+- src/main/scala/cartservice/CartRoutes.scala (trimmed)
+- src/main/scala/cartservice/CartServiceConfig.scala (PostgresConfig removed)
+- src/main/scala/cartservice/Main.scala (Migrations.run removed, temporary in-memory store)
+- src/main/resources/application.conf (postgres block removed)
+- build.sbt (skunk/flyway/postgresql-JDBC deps + otel4s overrides removed)
+- src/test/scala/cartservice/CartStoreSuite.scala (rewritten for new algebra)
+- src/test/scala/cartservice/CartRoutesSuite.scala (PATCH/PUT tests removed, bodies dropped)
+- src/test/scala/cartservice/CartServiceConfigSuite.scala (postgres fixtures removed)
+- src/test/scala/cartservice/HealthRoutesSuite.scala (stub store updated)
+- src/test/scala/cartservice/CartDocsSuite.scala (request body dropped)
+
+Files deleted:
+- src/main/scala/cartservice/Migrations.scala
+- src/test/scala/cartservice/MigrationsSuite.scala
+- src/test/scala/cartservice/CartStorePostgresSuite.scala
+- src/main/resources/db/migration/V1__create_cart_table.sql
+
+Why: redis-cart-model_20261002's spec requires replacing the generator's default
+Postgres scaffold (no field-spec exists for cart) with a hand-designed Redis-shaped
+line-item model, since gluon/docs/system-design.md pins cart-service as Redis-only.
+
+Tests: sbt scalafmtCheck test - 39 passed, 0 failed.
