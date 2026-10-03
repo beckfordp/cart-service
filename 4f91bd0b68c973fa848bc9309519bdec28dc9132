@@ -1,0 +1,22 @@
+Task: Add DELETE /carts/{id}/items/{sku} endpoint (final, Phase 3 of cart-items_20261002)
+
+Summary: Added removeItemEndpoint/removeItemServerEndpoint - simpler than addItem's,
+only one error case (CartNotFound, 404), so reuses notFoundOutput directly rather
+than a oneOf. Delegates straight to CartStore.removeItem, whose own no-op-on-missing-
+sku semantics (HDEL is idempotent) means removing a sku that isn't present just
+returns the unchanged cart, not an error - matches spec exactly. Wired into
+CartRoutes.routes and Main.scala's endpoint list.
+
+This closes out cart-items_20261002 and US-2.1 - cart-service now supports the full
+add/remove-item HTTP surface the story asked for.
+
+Files modified:
+- src/main/scala/cartservice/CartRoutes.scala (removeItemEndpoint,
+  removeItemServerEndpoint)
+- src/main/scala/cartservice/Main.scala (wired into the live endpoint list)
+- src/test/scala/cartservice/CartRoutesSuite.scala (3 new tests)
+
+Why: US-2.1's spec, Functional Requirement 2 - remove an item entirely, no-op if
+not present, 404 on unknown cart.
+
+Tests: sbt scalafmtCheck test - 65 passed, 0 failed. Coverage: 90.74%/90.91%.
