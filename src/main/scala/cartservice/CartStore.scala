@@ -3,7 +3,6 @@ package cartservice
 import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all._
 import dev.profunktor.redis4cats.Redis
-import dev.profunktor.redis4cats.RedisCommands
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
 import org.typelevel.log4cats.StructuredLogger
@@ -187,6 +186,16 @@ object CartStore {
                       _ <- commands.hSet(key, updatedAtField, now.toString)
                       _ <- commands.expire(key, ttl)
                       updated <- getCart(id)
+                      // Defensive cleanup: if a concurrent delete raced this
+                      // operation (landed between the exists check above and
+                      // the hSet touch just now), that hSet would have
+                      // resurrected an empty hash with only an updatedAt
+                      // field - getCart returns None for it (no createdAt),
+                      // but the key would otherwise linger until its TTL
+                      // expires. Clean it up immediately instead.
+                      _ <-
+                        if (updated.isEmpty) commands.del(key).void
+                        else Sync[F].unit
                     } yield updated
               } yield result
             }
