@@ -33,6 +33,12 @@ object ErrorResponse {
   implicit val codec: Codec[ErrorResponse] = deriveCodec
 }
 
+final case class AddItemRequest(sku: String, quantity: Int)
+
+object AddItemRequest {
+  implicit val codec: Codec[AddItemRequest] = deriveCodec
+}
+
 object CartRoutes {
 
   private val createCartEndpoint
@@ -70,6 +76,26 @@ object CartRoutes {
       .in("carts" / path[String]("id"))
       .out(statusCode(StatusCode.NoContent))
       .errorOut(notFoundOutput)
+
+  private val addItemErrorOutput: EndpointOutput[CartError] =
+    oneOf[CartError](
+      oneOfVariantValueMatcher(invalidQuantityOutput) { case InvalidQuantity =>
+        true
+      },
+      oneOfVariantValueMatcher(notFoundOutput) { case CartNotFound => true }
+    )
+
+  private val addItemEndpoint: PublicEndpoint[
+    (String, AddItemRequest),
+    CartError,
+    CartResponse,
+    Any
+  ] =
+    endpoint.post
+      .in("carts" / path[String]("id") / "items")
+      .in(jsonBody[AddItemRequest])
+      .out(jsonBody[CartResponse])
+      .errorOut(addItemErrorOutput)
 
   def serverEndpoint[F[_]: Async](
       store: CartStore[F],
@@ -140,6 +166,38 @@ object CartRoutes {
       } yield result
     }
 
+  def addItemServerEndpoint[F[_]: Async](
+      store: CartStore[F],
+      logger: StructuredLogger[F]
+  ): ServerEndpoint[Any, F] =
+    addItemEndpoint.serverLogic[F] { case (id, req) =>
+      for {
+        _ <- logger.info(
+          Map(
+            "method" -> "POST",
+            "path" -> s"/carts/$id/items",
+            "cart_id" -> id
+          )
+        )("Received request")
+        result <-
+          if (req.quantity <= 0)
+            logger
+              .warn(Map("cart_id" -> id))("Invalid quantity")
+              .as(Left(InvalidQuantity))
+          else
+            store.addItem(id, req.sku, req.quantity).flatMap {
+              case Some(entity) =>
+                logger
+                  .info(Map("cart_id" -> id))("Request completed")
+                  .as(Right(CartResponse(entity)))
+              case None =>
+                logger
+                  .warn(Map("cart_id" -> id))("Cart not found")
+                  .as(Left(CartNotFound))
+            }
+      } yield result
+    }
+
   def routes[F[_]: Async](
       store: CartStore[F],
       logger: StructuredLogger[F]
@@ -148,6 +206,7 @@ object CartRoutes {
       List(
         serverEndpoint(store, logger),
         getCartServerEndpoint(store, logger),
+        addItemServerEndpoint(store, logger),
         deleteCartServerEndpoint(store, logger)
       )
     )

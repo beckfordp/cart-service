@@ -70,6 +70,91 @@ class CartRoutesSuite extends CatsEffectSuite {
       def ping: IO[Boolean] = IO.raiseError(error)
     }
 
+  test("POST /carts/{id}/items with a new sku adds it at the given quantity") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      postResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts")
+      )
+      created <- postResponse.as[CartResponse]
+      addResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 3))
+      )
+      updated <- addResponse.as[CartResponse]
+    } yield {
+      assertEquals(addResponse.status, Status.Ok)
+      assertEquals(updated.items, Map("sku-1" -> 3))
+    }
+  }
+
+  test(
+    "POST /carts/{id}/items with an existing sku increments its quantity"
+  ) {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      postResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts")
+      )
+      created <- postResponse.as[CartResponse]
+      _ <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 3))
+      )
+      secondResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 2))
+      )
+      updated <- secondResponse.as[CartResponse]
+    } yield assertEquals(updated.items, Map("sku-1" -> 5))
+  }
+
+  test("POST /carts/{id}/items with quantity <= 0 returns 400") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      postResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts")
+      )
+      created <- postResponse.as[CartResponse]
+      addResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 0))
+      )
+      body <- addResponse.as[io.circe.Json]
+      cartAfter <- routes.orNotFound
+        .run(Request[IO](Method.GET, uri"/carts" / created.id))
+        .flatMap(_.as[CartResponse])
+    } yield {
+      assertEquals(addResponse.status, Status.BadRequest)
+      assert(
+        body.asObject.exists(_.contains("error")),
+        s"expected a JSON error body, got: $body"
+      )
+      assertEquals(cartAfter.items, Map.empty[String, Int])
+    }
+  }
+
+  test("POST /carts/{id}/items against a nonexistent cart id returns 404") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      response <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / "unknown-id" / "items")
+          .withEntity(AddItemRequest("sku-1", 1))
+      )
+      body <- response.as[io.circe.Json]
+    } yield {
+      assertEquals(response.status, Status.NotFound)
+      assert(
+        body.asObject.exists(_.contains("error")),
+        s"expected a JSON error body, got: $body"
+      )
+    }
+  }
+
   test("POST /carts returns 201 with the created entity") {
     for {
       store <- CartStore.inMemory[IO]

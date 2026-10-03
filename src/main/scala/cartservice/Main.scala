@@ -38,6 +38,7 @@ object Main extends IOApp.Simple {
                     List(
                       CartRoutes.serverEndpoint[IO](store, logger),
                       CartRoutes.getCartServerEndpoint[IO](store, logger),
+                      CartRoutes.addItemServerEndpoint[IO](store, logger),
                       CartRoutes.deleteCartServerEndpoint[IO](store, logger),
                       HealthRoutes.healthServerEndpoint[IO],
                       HealthRoutes.readyServerEndpoint[IO](store)
