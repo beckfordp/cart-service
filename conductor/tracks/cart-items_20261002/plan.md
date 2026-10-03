@@ -23,11 +23,11 @@ them.
 
 ## Phase 3: DELETE /carts/{id}/items/{sku} (remove item)
 
-- [ ] Task: Write failing CartRoutesSuite tests: removing an existing sku succeeds (200 + cart without it); removing a sku not present is a no-op (200 + unchanged cart); remove against a nonexistent cart id returns 404
-- [ ] Task: Define `removeItemEndpoint` and `removeItemServerEndpoint`, calling `CartStore.removeItem`
-- [ ] Task: Wire the new endpoint into `CartRoutes.routes` and `Main.scala`'s endpoint list
-- [ ] Task: Run the full test suite, confirm green
-- [ ] Task: Verify coverage (`sbt coverage test coverageReport`), target >80% on new/changed code
+- [x] Task: Write failing CartRoutesSuite tests: removing an existing sku succeeds (200 + cart without it); removing a sku not present is a no-op (200 + unchanged cart); remove against a nonexistent cart id returns 404 `4f91bd0`
+- [x] Task: Define `removeItemEndpoint` and `removeItemServerEndpoint`, calling `CartStore.removeItem` `4f91bd0` - reuses `notFoundOutput` directly (no `oneOf` needed, only one error case)
+- [x] Task: Wire the new endpoint into `CartRoutes.routes` and `Main.scala`'s endpoint list `4f91bd0`
+- [x] Task: Run the full test suite, confirm green `4f91bd0` - 65 passed, 0 failed
+- [x] Task: Verify coverage (`sbt coverage test coverageReport`), target >80% on new/changed code `4f91bd0` - 90.74% statement / 90.91% branch
 - [ ] Task: Conductor - User Manual Verification 'DELETE /carts/{id}/items/{sku}' (final, Protocol in workflow.md)
 
 Three phases, each independently testable: Phase 1 is a pure data-shape change (no
