@@ -12,13 +12,13 @@
 - [x] Task: Run the full test suite, confirm green `f2233ec` - 39 passed, 0 failed; `sbt scalafmtCheck test` clean
 - [x] Task: Conductor - User Manual Verification 'Redesign domain model & CartStore algebra' (Protocol in workflow.md) `6160fe3` - verified via committed script (prompt-off), see git note on checkpoint commit
 
-## Phase 2: Redis-backed CartStore implementation
+## Phase 2: Redis-backed CartStore implementation [checkpoint: 334eb63]
 
 - [x] Task: Add `redis4cats` dependency to `build.sbt` `8d42a87` - also swapped the now-unused `testcontainers-scala-postgresql` test dependency for `testcontainers-scala-redis`
 - [x] Task: Write a failing Testcontainers-Redis integration suite (`CartStoreRedisSuite`, mirroring the deleted `CartStorePostgresSuite`'s role): create/get/addItem-increments/addItem-new-sku/removeItem/setQuantity-to-zero-removes/delete/ping, plus a TTL assertion (key has a positive TTL after any write) `8d42a87` - also added a `db.client.operation.duration` metrics assertion, mirroring `CartStorePostgresSuite`'s equivalent test
 - [x] Task: Implement `CartStore.redis[F]` using redis4cats hash commands (HSET/HINCRBY/HDEL/HGETALL) + EXPIRE on every write, instrumented with the same timed-histogram pattern the Postgres store used (`db.client.operation.duration`, `db.system="redis"`) `8d42a87` - added a standalone `RedisConfig(uri, ttlSeconds)` to `CartServiceConfig.scala` to carry the connection string/TTL in; **deviation:** plan called for "RedisConfig (host, port)," but `RedisContainer` (testcontainers-scala-redis) only exposes a `redisUri`, and redis4cats connects via a URI string — `uri`/`ttlSeconds` matches order-service's own already-working `RedisConfig` shape exactly, see git note on this commit
 - [x] Task: Run tests, confirm CartStoreRedisSuite green `8d42a87` - 17 passed, 0 failed
-- [ ] Task: Conductor - User Manual Verification 'Redis-backed CartStore' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Redis-backed CartStore' (Protocol in workflow.md) `334eb63` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 ## Phase 3: Config, Main.scala wiring, docker-compose
 
