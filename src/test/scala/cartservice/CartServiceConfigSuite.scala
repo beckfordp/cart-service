@@ -11,6 +11,10 @@ class CartServiceConfigSuite extends CatsEffectSuite {
       |port = 8080
       |metrics-port = 9090
       |service-name = "cart-service"
+      |redis {
+      |  uri = "redis://localhost:6379"
+      |  ttl-seconds = 86400
+      |}
       |""".stripMargin
 
   test("loads a fully-specified config") {
@@ -22,22 +26,27 @@ class CartServiceConfigSuite extends CatsEffectSuite {
         CartServiceConfig(
           port = 8080,
           metricsPort = 9090,
-          serviceName = "cart-service"
+          serviceName = "cart-service",
+          redis = RedisConfig(
+            uri = "redis://localhost:6379",
+            ttlSeconds = 86400
+          )
         )
       )
     )
   }
 
   test("fails to load when a required field is missing") {
-    val missingServiceName =
+    val missingRedis =
       """
         |port = 8080
         |metrics-port = 9090
+        |service-name = "cart-service"
         |""".stripMargin
 
     assert(
       ConfigSource
-        .string(missingServiceName)
+        .string(missingRedis)
         .load[CartServiceConfig]
         .isLeft
     )
@@ -48,6 +57,10 @@ class CartServiceConfigSuite extends CatsEffectSuite {
       assertEquals(config.port, 8080)
       assertEquals(config.metricsPort, 9090)
       assertEquals(config.serviceName, "cart-service")
+      assertEquals(
+        config.redis,
+        RedisConfig(uri = "redis://localhost:6379", ttlSeconds = 86400)
+      )
     }
   }
 }

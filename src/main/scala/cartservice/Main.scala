@@ -1,6 +1,6 @@
 package cartservice
 
-import cats.effect.{IO, IOApp, Resource}
+import cats.effect.{IO, IOApp}
 import com.comcast.ip4s._
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits._
@@ -30,31 +30,30 @@ object Main extends IOApp.Simple {
                   "metrics_port" -> config.metricsPort.toString
                 )
               )("cart-service starting")
-              // Temporary: in-memory store pending the Redis-backed CartStore
-              // landing in this track's own Phase 2/3.
-              _ <- Resource.eval(CartStore.inMemory[IO]).use { store =>
-                val docsRoutes = Docs.routes[IO](
-                  "Cart Service",
-                  "1.0",
-                  List(
-                    CartRoutes.serverEndpoint[IO](store, logger),
-                    CartRoutes.getCartServerEndpoint[IO](store, logger),
-                    CartRoutes.deleteCartServerEndpoint[IO](store, logger),
-                    HealthRoutes.healthServerEndpoint[IO],
-                    HealthRoutes.readyServerEndpoint[IO](store)
+              _ <- CartStore.redis[IO](config.redis, meter, logger).use {
+                store =>
+                  val docsRoutes = Docs.routes[IO](
+                    "Cart Service",
+                    "1.0",
+                    List(
+                      CartRoutes.serverEndpoint[IO](store, logger),
+                      CartRoutes.getCartServerEndpoint[IO](store, logger),
+                      CartRoutes.deleteCartServerEndpoint[IO](store, logger),
+                      HealthRoutes.healthServerEndpoint[IO],
+                      HealthRoutes.readyServerEndpoint[IO](store)
+                    )
                   )
-                )
-                val tracedRoutes =
-                  ServerTracing.middleware(tracer)(docsRoutes)
-                val routes =
-                  ServerMetrics.middleware[IO](meter)(tracedRoutes)
-                EmberServerBuilder
-                  .default[IO]
-                  .withHost(host"0.0.0.0")
-                  .withPort(port)
-                  .withHttpApp(routes.orNotFound)
-                  .build
-                  .useForever
+                  val tracedRoutes =
+                    ServerTracing.middleware(tracer)(docsRoutes)
+                  val routes =
+                    ServerMetrics.middleware[IO](meter)(tracedRoutes)
+                  EmberServerBuilder
+                    .default[IO]
+                    .withHost(host"0.0.0.0")
+                    .withPort(port)
+                    .withHttpApp(routes.orNotFound)
+                    .build
+                    .useForever
               }
             } yield ()
         }
