@@ -1,0 +1,30 @@
+Phase 3 (final) verification report: Config, Main.scala wiring, docker-compose (redis-cart-model_20261002)
+
+Automated tests: sbt scalafmtCheck test - 56 passed, 0 failed, scalafmt clean.
+Coverage: sbt coverage test coverageReport - 90.28% statement / 90.00% branch.
+
+Manual verification: run via committed script (prompt-off mode -
+.claude/prompt-off), not an interactive walkthrough.
+
+Command: ./scripts/verify-redis-wiring-end-to-end.sh
+
+Steps and outcomes:
+1. docker compose up -d (fresh volumes) - exactly one service, 'redis', comes up.
+   No Postgres anywhere in the compose file or the running stack.
+2. sbt run - cart-service boots against the real docker-compose Redis;
+   /health/ready returns 200 (CartStore.ping succeeds against real Redis).
+3. POST /carts - 201, creates an empty cart in the real Redis.
+4. Killed and restarted the service (sbt run again) - GET /carts/{id} for the
+   same cart still returns 200, proving the cart is actually persisted in
+   Redis, not an in-process artifact of a single run.
+5. DELETE /carts/{id} - 204, then a subsequent GET returns 404.
+
+All checks passed.
+
+This closes out redis-cart-model_20261002: cart-service runs against Redis only,
+with no Postgres anywhere in the repo, matching gluon/docs/system-design.md's
+"Redis only, primary store" row for this service.
+
+Confirmation: equivalent to explicit user "yes" - prompt-off mode substitutes
+a deterministic, committed script for the interactive manual-verification
+question per the Phase Completion protocol.
