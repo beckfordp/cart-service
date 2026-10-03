@@ -21,14 +21,14 @@ them.
 - [x] Task: Run tests, confirm green `56c1c10` - 62 passed, 0 failed
 - [x] Task: Conductor - User Manual Verification 'POST /carts/{id}/items' (Protocol in workflow.md) `0efdf27` - verified via committed script (prompt-off), see git note on checkpoint commit
 
-## Phase 3: DELETE /carts/{id}/items/{sku} (remove item)
+## Phase 3: DELETE /carts/{id}/items/{sku} (remove item) [checkpoint: e1338a1]
 
 - [x] Task: Write failing CartRoutesSuite tests: removing an existing sku succeeds (200 + cart without it); removing a sku not present is a no-op (200 + unchanged cart); remove against a nonexistent cart id returns 404 `4f91bd0`
 - [x] Task: Define `removeItemEndpoint` and `removeItemServerEndpoint`, calling `CartStore.removeItem` `4f91bd0` - reuses `notFoundOutput` directly (no `oneOf` needed, only one error case)
 - [x] Task: Wire the new endpoint into `CartRoutes.routes` and `Main.scala`'s endpoint list `4f91bd0`
 - [x] Task: Run the full test suite, confirm green `4f91bd0` - 65 passed, 0 failed
 - [x] Task: Verify coverage (`sbt coverage test coverageReport`), target >80% on new/changed code `4f91bd0` - 90.74% statement / 90.91% branch
-- [ ] Task: Conductor - User Manual Verification 'DELETE /carts/{id}/items/{sku}' (final, Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'DELETE /carts/{id}/items/{sku}' (final, Protocol in workflow.md) `e1338a1` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 Three phases, each independently testable: Phase 1 is a pure data-shape change (no
 new endpoints yet), Phase 2 adds the add-item endpoint in isolation, Phase 3 adds
