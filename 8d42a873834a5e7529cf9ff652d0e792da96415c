@@ -1,0 +1,38 @@
+Task: Implement Redis-backed CartStore (Phase 2 of redis-cart-model_20261002)
+
+Summary: Added redis4cats (redis4cats-effects/log4cats) + testcontainers-scala-redis
+(swapped out for the now-unused testcontainers-scala-postgresql) to build.sbt.
+Implemented CartStore.redis[F], backing the Phase 1 line-item algebra with a Redis
+Hash per cart (key `cart:<id>`, fields = sku -> stringified quantity, plus two
+reserved metadata fields `__created_at`/`__updated_at`). addItem/removeItem/
+setQuantity use HINCRBY/HDEL/HSET - atomic against concurrent same-cart writes - via
+a shared `mutateIfExists` helper that checks existence first (so HINCRBY can't
+auto-create a hash for a cart that was never created, which is Redis's own default
+behavior and would otherwise violate "None if the cart doesn't exist"), then refreshes
+the cart's TTL and the updatedAt field on every write. Instrumented with the same
+db.client.operation.duration histogram pattern the Postgres store used, with
+db.system="redis". Added a standalone RedisConfig(uri, ttlSeconds) to
+CartServiceConfig.scala - mirrors order-service's own RedisConfig shape exactly
+(deviation: the approved plan said "RedisConfig (host, port)", but testcontainers-
+scala-redis's RedisContainer only exposes a redisUri, and redis4cats connects via a
+URI string - uri+ttlSeconds matches the already-working order-service precedent in
+this same codebase with zero added plumbing) - not yet wired into the aggregate
+CartServiceConfig (that's Phase 3).
+
+Deliberately out of scope here (per spec): product snapshotting, catalog-service
+calls, and any CartRoutes/Main.scala wiring - this phase only proves the store
+against a real Redis via CartStoreRedisSuite.
+
+Files created/modified:
+- src/main/scala/cartservice/CartStore.scala (added CartStore.redis + helpers)
+- src/main/scala/cartservice/CartServiceConfig.scala (added standalone RedisConfig)
+- build.sbt (redis4cats deps added; testcontainers-scala-postgresql swapped for
+  testcontainers-scala-redis)
+- src/test/scala/cartservice/CartStoreRedisSuite.scala (new - 17 tests, including a
+  TTL assertion opening a direct redis4cats connection, and a metrics assertion)
+
+Why: spec requires a Redis-backed implementation of the line-item algebra, atomic
+against concurrent same-cart mutations, with session TTL - the whole reason this
+track exists (system-design.md pins cart-service as Redis-only).
+
+Tests: sbt scalafmtCheck test - 56 passed, 0 failed.
