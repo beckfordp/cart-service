@@ -1,0 +1,30 @@
+Task: Wire Redis-backed CartStore into Main, docker-compose, config (Phase 3, final, of redis-cart-model_20261002)
+
+Summary: Wired the standalone RedisConfig(uri, ttlSeconds) from Phase 2 into the
+aggregate CartServiceConfig as a required `redis` field; added application.conf's
+redis block (uri defaults to redis://localhost:6379, ttl defaults to 86400s/24h, both
+env-overridable via REDIS_URI/CART_TTL_SECONDS, mirroring order-service's own
+pattern). Replaced docker-compose.yml's postgres service entirely with a redis:7-
+alpine service (redis-cli ping healthcheck) - no volume, since cart data is
+deliberately ephemeral. Updated Main.scala to build/use CartStore.redis(config.redis,
+meter, logger) in place of the temporary CartStore.inMemory introduced in Phase 1.
+HealthRoutesSuite/CartDocsSuite's stub stores needed no changes - their trait shape
+was already correct from Phase 1, the plan's own wording anticipated a need that
+turned out already satisfied.
+
+Verified sbt coverage test coverageReport: 90.28% statement / 90.00% branch - well
+above the >80% target, no new tests needed to close a gap.
+
+Files modified:
+- src/main/scala/cartservice/CartServiceConfig.scala (redis field added to the
+  aggregate config)
+- src/main/resources/application.conf (redis block added)
+- docker-compose.yml (postgres -> redis)
+- src/main/scala/cartservice/Main.scala (CartStore.redis wired in)
+- src/test/scala/cartservice/CartServiceConfigSuite.scala (redis fixtures added)
+
+Why: closes out redis-cart-model_20261002 - cart-service now runs against Redis
+only, with no Postgres anywhere in the repo, matching
+gluon/docs/system-design.md's "Redis only, primary store" row for this service.
+
+Tests: sbt scalafmtCheck test - 56 passed, 0 failed. Coverage: 90.28%/90.00%.
