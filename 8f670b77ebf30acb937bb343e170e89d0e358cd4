@@ -1,0 +1,21 @@
+Phase 1 verification report: Error ADT + CartResponse items field (cart-items_20261002)
+
+Automated tests: sbt scalafmtCheck test - 58 passed, 0 failed, scalafmt clean.
+
+Manual verification: run via committed script (prompt-off mode -
+.claude/prompt-off), not an interactive walkthrough.
+
+Command: ./scripts/verify-cart-response-items-field.sh
+
+Steps and outcomes:
+1. docker compose up -d + sbt run - cart-service boots cleanly.
+2. POST /carts - response body includes an "items" field, empty object for a
+   freshly created cart.
+3. GET /carts/{id} - same items field present.
+
+All checks passed. (InvalidQuantity's error output isn't reachable via any real
+route yet - that's Phase 2 - so nothing to check live for it at this checkpoint.)
+
+Confirmation: equivalent to explicit user "yes" - prompt-off mode substitutes
+a deterministic, committed script for the interactive manual-verification
+question per the Phase Completion protocol.
