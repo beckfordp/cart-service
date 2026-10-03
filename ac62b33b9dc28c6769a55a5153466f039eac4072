@@ -1,0 +1,21 @@
+Task: Error ADT + CartResponse items field (Phase 1 of cart-items_20261002)
+
+Summary: Added InvalidQuantity to CartError alongside CartNotFound. Added
+items: Map[String, Int] to CartResponse, carried through from Cart via
+CartResponse.apply. Added a reusable invalidQuantityOutput: EndpointOutput[CartError]
+(400 + JSON error body), mirroring notFoundOutput's shape exactly - not yet wired
+into any real endpoint (that's Phase 2's oneOf-combined errorOut), but unit-tested
+in isolation now via a throwaway ad-hoc tapir endpoint, the same way CartDocsSuite
+tests a single endpoint's behavior standalone.
+
+Files modified:
+- src/main/scala/cartservice/CartError.scala (InvalidQuantity added)
+- src/main/scala/cartservice/CartRoutes.scala (CartResponse.items,
+  invalidQuantityOutput added as private[cartservice] for test visibility)
+- src/test/scala/cartservice/CartRoutesSuite.scala (2 new tests)
+
+Why: US-2.1's spec requires InvalidQuantity (400) alongside CartNotFound (404) as
+distinct typed errors, and CartResponse needs to actually surface cart contents
+before add/remove-item endpoints (Phase 2/3) would have anything to return.
+
+Tests: sbt scalafmtCheck test - 58 passed, 0 failed.
