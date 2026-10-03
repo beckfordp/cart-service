@@ -2,8 +2,6 @@
 
 This file tracks all major tracks for the project.
 
-- [x] **Track: Design the Redis cart data model (line items) and drop the generated Postgres layer**
-  *Link: [./tracks/redis-cart-model_20261002/](./tracks/redis-cart-model_20261002/)*
 - [ ] **Track: US-2.1: add/remove items in a cart**
   *Link: [./tracks/cart-items_20261002/](./tracks/cart-items_20261002/)*
 
