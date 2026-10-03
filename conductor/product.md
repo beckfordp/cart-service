@@ -16,37 +16,38 @@ only** (Redis as primary store, no Postgres) — unlike every other Gluon
 service, which is Postgres-backed.
 
 Generated via `pure-service-generator` (giter8 template over `purerest`) as
-a **bare scaffold** — no field-spec exists for cart (`gluon/specs/cart.yaml`
-is absent), so none was applied. This is deliberate, not an oversight: per
-`gluon/backlogs/cart-service.md`'s first line, the next work on this repo is
-to design the Redis cart data model by hand (not generator field-spec
-syntax, which has no notion of a Redis-backed or collection-shaped entity)
-and drop the generated Postgres layer entirely.
+a bare scaffold — no field-spec exists for cart (`gluon/specs/cart.yaml` is
+absent), so none was applied, deliberately: a line-item/Redis-backed entity
+isn't representable by generator field-spec syntax (no collection or
+Redis-backed type support), so the domain model below was hand-designed
+instead (`redis-cart-model_20261002`), replacing the generator's default
+Postgres layer entirely.
 
 ## Domain model
-- **Cart** (generated scaffold, **not yet hand-extended**) — currently only
-  `id`/`createdAt`/`updatedAt`; every codegen field-substitution point
-  (`CartStore.scala`, `CartRoutes.scala`) is still a bare
-  `/* codegen:fields:* */` placeholder comment, since no field-spec was
-  applied. The real shape — a customer's cart as a collection of line items
-  (`sku`, `quantity`, product snapshot fields) — isn't representable by
-  codegen v1 (no collection/nested-entity support, same limitation that
-  pushed order-service's `OrderItem` outside its own codegen'd entity) and
-  must be hand-designed against Redis data structures directly, not
-  retrofitted onto the generated `CartStore`/Postgres shape.
-- The generated persistence layer (`CartStore.postgres`, `Migrations.scala`,
-  Flyway, skunk, the `cart` Postgres database/table, `docker-compose.yml`'s
-  `postgres` service) is all **scaffold to be deleted**, not a starting
-  point to extend — see "Out of scope" and `conductor/tech-stack.md`.
+- **Cart** — `id` (server-generated UUID string), `items: Map[sku, quantity]`
+  (a customer's cart as a flat collection of line items — sku + quantity
+  only, no product-name/price snapshot), `createdAt`/`updatedAt`.
+  Hand-designed, not field-spec'd — codegen v1 has no collection/nested-entity
+  support (same limitation that pushed order-service's `OrderItem` outside
+  its own codegen'd entity).
+- **Redis representation**: one Hash per cart at key `cart:<id>` — field name
+  = sku, field value = quantity; two reserved metadata fields
+  (`__created_at`/`__updated_at`) share the hash. A session TTL (24h default,
+  `CART_TTL_SECONDS`-overridable) refreshes on every write, so an abandoned
+  cart cleans itself up with no background job.
+- `CartStore[F]`: `create`/`get`/`addItem`/`removeItem`/`setQuantity`/
+  `delete`/`ping`, backed by `CartStore.redis` (redis4cats) in production,
+  `CartStore.inMemory` in unit tests. No Postgres anywhere in this repo.
 
 ## User stories in scope (gluon/docs/user-stories.md)
 - US-2.1 — add/remove items in a cart
 
 ## Sequencing (gluon/PLAN.md)
 - **Phase 7** (independent of the fulfillment spine — can run anytime)
-  1. *(infra, this repo's backlog item 1)* design the Redis cart data model
-     (line items) and drop the generated Postgres layer
-  2. US-2.1 — add/remove items, built on that Redis model
+  1. ~~design the Redis cart data model and drop the generated Postgres
+     layer~~ — done (`redis-cart-model_20261002`)
+  2. US-2.1 — add/remove items, built on that Redis model (in progress —
+     `cart-items_20261002`)
 
 ## Events
 None. cart-service neither publishes nor consumes Kafka events (per
@@ -60,5 +61,5 @@ synchronously via its own REST API only.
 - Catalog data (catalog-service's job; a cart line item is a logical
   reference + snapshot only, never a live catalog lookup or a cross-service
   Postgres FK)
-- Postgres persistence of any kind, once the redesign above lands — this is
-  the one Gluon service with no database
+- Postgres persistence of any kind — this is the one Gluon service with no
+  database

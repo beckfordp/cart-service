@@ -16,22 +16,20 @@ style).
   ADT (`CartError`) — no catch-all exception translator, one explicit
   `errorOut` mapping per case
 - REST paths pluralized (`/carts`, `/carts/{id}`)
-- PATCH = partial update; PUT = idempotent full-replace (same client-writable
-  fields as PATCH)
+- No generic whole-cart PATCH/PUT — a line-item model has no single "update"
+  operation; item-level mutation is add/remove/set-quantity instead (see
+  US-2.1's own track)
 - **Redis only, no Postgres** — unlike every other Gluon service, this one
   has no dedicated database. Its "one store per service" boundary is a
-  Redis keyspace/key-prefix convention (e.g. `cart:<id>`) rather than a
-  Postgres database name; still never read/written by any other service
-  directly. No Flyway, no schema migrations, no skunk — those exist only in
-  the current unconverted scaffold and are slated for removal (see
-  `conductor/tech-stack.md`).
+  Redis keyspace/key-prefix convention (`cart:<id>`) rather than a Postgres
+  database name; still never read/written by any other service directly.
+  No Flyway, no schema migrations, no skunk.
 - Swagger/OpenAPI docs generated from the same tapir endpoint definitions as
   the real routes (`purerest.docs.Docs`) — stays in sync by construction
 
 ## Testing
 - scalafmt + munit + munit-cats-effect
-- Once Redis-backed: an in-memory `CartStore` for unit tests, a real,
-  ephemeral Redis container via Testcontainers for integration tests — same
-  shape as every other Gluon service's Testcontainers-Postgres pattern, just
-  pointed at Redis
+- An in-memory `CartStore` for unit tests, a real, ephemeral Redis container
+  via Testcontainers for integration tests — same shape as every other
+  Gluon service's Testcontainers-Postgres pattern, just pointed at Redis
 - `sbt scalafmtCheck test` before every commit (CI enforces the same)

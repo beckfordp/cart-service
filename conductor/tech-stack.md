@@ -13,13 +13,11 @@
 - tapir 1.11.25 — route definitions and generated Swagger/OpenAPI docs
   (`purerest.docs.Docs`), served at `/docs`, kept in sync by construction
 
-## Persistence (current scaffold — slated for removal)
-- skunk 1.0.0, Flyway 11.8.2 (+ flyway-database-postgresql), postgresql JDBC
-  42.7.13 — the generator's default Postgres layer. Per
-  `gluon/docs/system-design.md`, cart-service is **Redis only**; this
-  Postgres stack (plus `docker-compose.yml`'s `postgres` service) exists
-  only because no field-spec was applied, and is this repo's first backlog
-  item to delete, not extend.
+## Persistence
+- redis4cats-effects / redis4cats-log4cats 2.0.6 — cats-effect-native Redis
+  client, this service's only persistence layer (no Postgres anywhere — per
+  `gluon/docs/system-design.md`, cart-service is **Redis only**).
+  `RedisConfig(uri, ttlSeconds)` loaded via PureConfig.
 
 ## Config
 - pureconfig 0.17.10 — typed config from `application.conf`
@@ -34,20 +32,15 @@
 ## Testing
 - munit 1.3.6 + munit-cats-effect 2.2.1
 - log4cats-testing 2.8.0 — assert on structured log output
-- testcontainers-scala 0.43.6 (currently postgresql + munit modules; swap
-  for a Redis module once the Postgres layer is dropped)
+- testcontainers-scala 0.43.6 (redis + munit modules) — real, ephemeral
+  Redis for integration tests
 - scalafmt (default Scala 3 style) — `sbt scalafmtCheck test` run in CI
 
 ## Packaging / local deploy
 - sbt-native-packager (`JavaAppPackaging`, `DockerPlugin`)
 - Docker image: `eclipse-temurin:21-jre`
-- Docker Compose — currently a local `postgres` service; replace with Redis
-  once the persistence layer is redesigned
-
-## Not yet in `build.sbt` (needed for upcoming backlog items)
-- **Redis client** (e.g. `redis4cats` — the gvolpe reference project's
-  choice, see `gluon/docs/product.md`'s "Reference project" section) — for
-  the Redis cart data model/line items redesign and US-2.1
+- Docker Compose — a local `redis:7-alpine` service (no volume — cart data
+  is deliberately ephemeral)
 
 ## Target infrastructure (platform-wide, from `gluon/docs/system-design.md`)
 - Local: OrbStack Kubernetes (see ADR 0002)
