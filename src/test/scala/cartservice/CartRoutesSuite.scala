@@ -13,8 +13,45 @@ import org.typelevel.log4cats.testing.StructuredTestingLogger.{
   WARN
 }
 import purerest.tracing.{ServerTracing, Tracing}
+import sttp.tapir._
+import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 class CartRoutesSuite extends CatsEffectSuite {
+
+  test("CartResponse carries a cart's items through from the entity") {
+    val entity = Cart(
+      id = "cart-1",
+      items = Map("sku-1" -> 2, "sku-2" -> 5),
+      createdAt = java.time.Instant.parse("2026-01-01T00:00:00Z"),
+      updatedAt = java.time.Instant.parse("2026-01-01T00:00:00Z")
+    )
+    assertEquals(
+      CartResponse(entity).items,
+      Map("sku-1" -> 2, "sku-2" -> 5)
+    )
+  }
+
+  test("InvalidQuantity's error output maps to 400 with a JSON error body") {
+    val testEndpoint: PublicEndpoint[Unit, CartError, Unit, Any] =
+      endpoint.get
+        .in("test-invalid-quantity")
+        .errorOut(CartRoutes.invalidQuantityOutput)
+    val routes = Http4sServerInterpreter[IO]().toRoutes(
+      testEndpoint.serverLogic[IO](_ => IO.pure(Left(InvalidQuantity)))
+    )
+    for {
+      response <- routes.orNotFound.run(
+        Request[IO](Method.GET, uri"/test-invalid-quantity")
+      )
+      body <- response.as[io.circe.Json]
+    } yield {
+      assertEquals(response.status, Status.BadRequest)
+      assert(
+        body.asObject.exists(_.contains("error")),
+        s"expected a JSON error body, got: $body"
+      )
+    }
+  }
 
   private def failingStore(error: Throwable): CartStore[IO] =
     new CartStore[IO] {

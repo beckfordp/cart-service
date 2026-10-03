@@ -15,6 +15,7 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 final case class CartResponse(
     id: String,
+    items: Map[String, Int],
     createdAt: java.time.Instant,
     updatedAt: java.time.Instant
 )
@@ -23,7 +24,7 @@ object CartResponse {
   implicit val codec: Codec[CartResponse] = deriveCodec
 
   def apply(entity: Cart): CartResponse =
-    CartResponse(entity.id, entity.createdAt, entity.updatedAt)
+    CartResponse(entity.id, entity.items, entity.createdAt, entity.updatedAt)
 }
 
 final case class ErrorResponse(error: String)
@@ -45,6 +46,13 @@ object CartRoutes {
     statusCode(StatusCode.NotFound)
       .and(jsonBody[ErrorResponse])
       .map[CartError](_ => CartNotFound)(_ => ErrorResponse("Cart not found"))
+
+  private[cartservice] val invalidQuantityOutput: EndpointOutput[CartError] =
+    statusCode(StatusCode.BadRequest)
+      .and(jsonBody[ErrorResponse])
+      .map[CartError](_ => InvalidQuantity)(_ =>
+        ErrorResponse("Invalid quantity")
+      )
 
   private val getCartEndpoint: PublicEndpoint[
     String,
