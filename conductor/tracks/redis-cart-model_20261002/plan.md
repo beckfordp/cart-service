@@ -31,3 +31,7 @@
 - [x] Task: Conductor - User Manual Verification 'Redis wiring + docker-compose' (final, Protocol in workflow.md) `242e5f3` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 Three phases, each independently testable: Phase 1 redesigns the algebra and proves it in-memory while removing the old Postgres code (so nothing half-compiles against two shapes at once), Phase 2 adds the real Redis implementation against that same algebra, Phase 3 wires it into the running service and local dev environment.
+
+## Phase: Review Fixes
+
+- [x] Task: Apply review suggestions `6c791c9`
