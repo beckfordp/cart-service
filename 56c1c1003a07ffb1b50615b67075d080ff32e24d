@@ -1,0 +1,20 @@
+Task: Add POST /carts/{id}/items endpoint (Phase 2 of cart-items_20261002)
+
+Summary: Added AddItemRequest(sku, quantity) + circe codec. Added addItemErrorOutput,
+a tapir oneOf combining invalidQuantityOutput (400) and notFoundOutput (404) via
+oneOfVariantValueMatcher, discriminating on the actual CartError value at encode
+time (InvalidQuantity vs CartNotFound). Added addItemEndpoint/addItemServerEndpoint:
+validates quantity <= 0 at the HTTP boundary before ever calling the store (per
+development-guidelines.md's "validate at system boundaries"), otherwise delegates
+to CartStore.addItem. Wired into CartRoutes.routes and Main.scala's endpoint list.
+
+Files modified:
+- src/main/scala/cartservice/CartRoutes.scala (AddItemRequest, addItemErrorOutput,
+  addItemEndpoint, addItemServerEndpoint)
+- src/main/scala/cartservice/Main.scala (wired into the live endpoint list)
+- src/test/scala/cartservice/CartRoutesSuite.scala (4 new tests)
+
+Why: US-2.1's spec, Functional Requirement 1 - add an item, increment on existing
+sku, 400 on invalid quantity, 404 on unknown cart.
+
+Tests: sbt scalafmtCheck test - 62 passed, 0 failed.
