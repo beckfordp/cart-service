@@ -4,13 +4,13 @@
 `CartStore[F]`'s `addItem`/`removeItem` must already exist before Phase 2/3 can call
 them.
 
-## Phase 1: Error ADT + CartResponse items field
+## Phase 1: Error ADT + CartResponse items field [checkpoint: 8f670b7]
 
 - [x] Task: Write failing tests asserting `CartResponse` serializes an `items` field and `InvalidQuantity` maps to a 400 JSON error body `ac62b33` - the latter tested via a throwaway ad-hoc tapir endpoint wired with `invalidQuantityOutput`, since no real endpoint uses it yet
 - [x] Task: Add `InvalidQuantity` to `CartError` (alongside `CartNotFound`) `ac62b33`
 - [x] Task: Add `items: Map[String, Int]` to `CartResponse`; update `CartResponse.apply(entity)` to carry `entity.items` through `ac62b33`
 - [x] Task: Run tests, confirm green `ac62b33` - 58 passed, 0 failed
-- [ ] Task: Conductor - User Manual Verification 'Error ADT + CartResponse items field' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Error ADT + CartResponse items field' (Protocol in workflow.md) `8f670b7` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 ## Phase 2: POST /carts/{id}/items (add item)
 
