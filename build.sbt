@@ -9,6 +9,7 @@ val log4catsVersion = "2.8.0"
 val tapirVersion = "1.11.25"
 val pureconfigVersion = "0.17.10"
 val testcontainersScalaVersion = "0.43.6"
+val redis4catsVersion = "2.0.6"
 // Pinned to match the purerestlib version this service is built against — see
 // README's "Consuming purerest as a dependency" section.
 val purerestlibVersion = "0.1.0"
@@ -49,15 +50,19 @@ lazy val root = project
       "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion,
+      // redis4cats: cats-effect-native Redis client - this service's persistence
+      // layer (cart-service is Redis-only, see gluon/docs/system-design.md).
+      "dev.profunktor" %% "redis4cats-effects" % redis4catsVersion,
+      "dev.profunktor" %% "redis4cats-log4cats" % redis4catsVersion,
       // pureconfig: loads application.conf into typed config case classes.
       "com.github.pureconfig" %% "pureconfig-core" % pureconfigVersion,
       // munit: test framework used across this project (Scala-native, no JUnit dependency).
       "org.scalameta" %% "munit" % munitVersion % Test,
       // munit-cats-effect: lets test bodies return IO[Unit] and run under munit directly.
       "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test,
-      // testcontainers-scala: spins up a real, ephemeral Postgres container for
+      // testcontainers-scala: spins up a real, ephemeral Redis container for
       // integration tests (not used by main code).
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersScalaVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-redis" % testcontainersScalaVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersScalaVersion % Test,
       // log4cats-testing: purerestlib keeps this Test-scoped (doesn't propagate to
       // consumers), so this service declares its own copy to assert on log output
