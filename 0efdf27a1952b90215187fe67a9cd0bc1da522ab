@@ -1,0 +1,25 @@
+Phase 2 verification report: POST /carts/{id}/items (cart-items_20261002)
+
+Automated tests: sbt scalafmtCheck test - 62 passed, 0 failed, scalafmt clean.
+
+Manual verification: run via committed script (prompt-off mode -
+.claude/prompt-off), not an interactive walkthrough.
+
+Command: ./scripts/verify-add-item-endpoint.sh
+
+Steps and outcomes:
+1. docker compose up -d + sbt run - cart-service boots cleanly.
+2. POST /carts - creates a cart.
+3. POST /carts/{id}/items with a new sku - 200, item added at given quantity.
+4. POST again with the same sku - 200, quantity incremented (3 -> 5), not
+   overwritten.
+5. POST with quantity <= 0 - 400 with a JSON error body.
+6. POST against a nonexistent cart id - 404 with a JSON error body.
+
+All checks passed - confirms the tapir oneOf error output actually serializes
+distinct 400/404 bodies over real HTTP, not just at the tapir-value level the
+unit tests exercise.
+
+Confirmation: equivalent to explicit user "yes" - prompt-off mode substitutes
+a deterministic, committed script for the interactive manual-verification
+question per the Phase Completion protocol.
