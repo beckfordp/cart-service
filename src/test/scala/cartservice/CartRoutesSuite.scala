@@ -155,6 +155,74 @@ class CartRoutesSuite extends CatsEffectSuite {
     }
   }
 
+  test("DELETE /carts/{id}/items/{sku} removes that sku entirely") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      postResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts")
+      )
+      created <- postResponse.as[CartResponse]
+      _ <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 5))
+      )
+      removeResponse <- routes.orNotFound.run(
+        Request[IO](Method.DELETE, uri"/carts" / created.id / "items" / "sku-1")
+      )
+      updated <- removeResponse.as[CartResponse]
+    } yield {
+      assertEquals(removeResponse.status, Status.Ok)
+      assertEquals(updated.items, Map.empty[String, Int])
+    }
+  }
+
+  test(
+    "DELETE /carts/{id}/items/{sku} for a sku not in the cart is a no-op"
+  ) {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      postResponse <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts")
+      )
+      created <- postResponse.as[CartResponse]
+      _ <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 2))
+      )
+      removeResponse <- routes.orNotFound.run(
+        Request[IO](Method.DELETE, uri"/carts" / created.id / "items" / "sku-2")
+      )
+      updated <- removeResponse.as[CartResponse]
+    } yield {
+      assertEquals(removeResponse.status, Status.Ok)
+      assertEquals(updated.items, Map("sku-1" -> 2))
+    }
+  }
+
+  test(
+    "DELETE /carts/{id}/items/{sku} against a nonexistent cart id returns 404"
+  ) {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      response <- routes.orNotFound.run(
+        Request[IO](
+          Method.DELETE,
+          uri"/carts" / "unknown-id" / "items" / "sku-1"
+        )
+      )
+      body <- response.as[io.circe.Json]
+    } yield {
+      assertEquals(response.status, Status.NotFound)
+      assert(
+        body.asObject.exists(_.contains("error")),
+        s"expected a JSON error body, got: $body"
+      )
+    }
+  }
+
   test("POST /carts returns 201 with the created entity") {
     for {
       store <- CartStore.inMemory[IO]

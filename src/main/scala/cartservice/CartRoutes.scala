@@ -97,6 +97,17 @@ object CartRoutes {
       .out(jsonBody[CartResponse])
       .errorOut(addItemErrorOutput)
 
+  private val removeItemEndpoint: PublicEndpoint[
+    (String, String),
+    CartError,
+    CartResponse,
+    Any
+  ] =
+    endpoint.delete
+      .in("carts" / path[String]("id") / "items" / path[String]("sku"))
+      .out(jsonBody[CartResponse])
+      .errorOut(notFoundOutput)
+
   def serverEndpoint[F[_]: Async](
       store: CartStore[F],
       logger: StructuredLogger[F]
@@ -198,6 +209,32 @@ object CartRoutes {
       } yield result
     }
 
+  def removeItemServerEndpoint[F[_]: Async](
+      store: CartStore[F],
+      logger: StructuredLogger[F]
+  ): ServerEndpoint[Any, F] =
+    removeItemEndpoint.serverLogic[F] { case (id, sku) =>
+      for {
+        _ <- logger.info(
+          Map(
+            "method" -> "DELETE",
+            "path" -> s"/carts/$id/items/$sku",
+            "cart_id" -> id
+          )
+        )("Received request")
+        result <- store.removeItem(id, sku).flatMap {
+          case Some(entity) =>
+            logger
+              .info(Map("cart_id" -> id))("Request completed")
+              .as(Right(CartResponse(entity)))
+          case None =>
+            logger
+              .warn(Map("cart_id" -> id))("Cart not found")
+              .as(Left(CartNotFound))
+        }
+      } yield result
+    }
+
   def routes[F[_]: Async](
       store: CartStore[F],
       logger: StructuredLogger[F]
@@ -207,6 +244,7 @@ object CartRoutes {
         serverEndpoint(store, logger),
         getCartServerEndpoint(store, logger),
         addItemServerEndpoint(store, logger),
+        removeItemServerEndpoint(store, logger),
         deleteCartServerEndpoint(store, logger)
       )
     )
