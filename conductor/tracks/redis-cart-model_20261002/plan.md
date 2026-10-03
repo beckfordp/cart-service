@@ -20,7 +20,7 @@
 - [x] Task: Run tests, confirm CartStoreRedisSuite green `8d42a87` - 17 passed, 0 failed
 - [x] Task: Conductor - User Manual Verification 'Redis-backed CartStore' (Protocol in workflow.md) `334eb63` - verified via committed script (prompt-off), see git note on checkpoint commit
 
-## Phase 3: Config, Main.scala wiring, docker-compose
+## Phase 3: Config, Main.scala wiring, docker-compose [checkpoint: 242e5f3]
 
 - [x] Task: Add `RedisConfig` (host, port) to `CartServiceConfig.scala`; update `CartServiceConfigSuite` and `application.conf` `1bb767c` - wired the `uri`/`ttlSeconds`-shaped `RedisConfig` already added in Phase 2 into the aggregate `CartServiceConfig` as a required `redis` field (see Phase 2's deviation note on host/port vs. uri/ttlSeconds); `application.conf`'s new `redis` block defaults to `redis://localhost:6379` / 86400s (24h), both env-overridable
 - [x] Task: Replace `docker-compose.yml`'s `postgres` service with a `redis` service (`redis:7-alpine`, `redis-cli ping` healthcheck) `1bb767c` - no volume, cart data is deliberately ephemeral
@@ -28,6 +28,6 @@
 - [x] Task: Update any remaining `CartStore` stub implementations in `HealthRoutesSuite`/`CartDocsSuite` for the new trait shape `1bb767c` - no change needed, both were already correct from Phase 1
 - [x] Task: Run the full test suite, confirm green `1bb767c` - 56 passed, 0 failed; `sbt scalafmtCheck test` clean
 - [x] Task: Verify coverage (`sbt coverage test coverageReport`), target >80% on new/changed code `1bb767c` - 90.28% statement / 90.00% branch
-- [ ] Task: Conductor - User Manual Verification 'Redis wiring + docker-compose' (final, Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Redis wiring + docker-compose' (final, Protocol in workflow.md) `242e5f3` - verified via committed script (prompt-off), see git note on checkpoint commit
 
 Three phases, each independently testable: Phase 1 redesigns the algebra and proves it in-memory while removing the old Postgres code (so nothing half-compiles against two shapes at once), Phase 2 adds the real Redis implementation against that same algebra, Phase 3 wires it into the running service and local dev environment.
