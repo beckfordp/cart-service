@@ -14,11 +14,11 @@ them.
 
 ## Phase 2: POST /carts/{id}/items (add item)
 
-- [ ] Task: Write failing CartRoutesSuite tests: adding a new sku succeeds (200 + cart with the item); adding an existing sku increments its quantity; `quantity <= 0` returns 400; add against a nonexistent cart id returns 404
-- [ ] Task: Add `AddItemRequest(sku: String, quantity: Int)` case class + circe codec
-- [ ] Task: Define `addItemEndpoint` (tapir, a `oneOf` error output distinguishing 400 `InvalidQuantity` from 404 `CartNotFound`) and `addItemServerEndpoint`, calling `CartStore.addItem`
-- [ ] Task: Wire the new endpoint into `CartRoutes.routes` and `Main.scala`'s endpoint list
-- [ ] Task: Run tests, confirm green
+- [x] Task: Write failing CartRoutesSuite tests: adding a new sku succeeds (200 + cart with the item); adding an existing sku increments its quantity; `quantity <= 0` returns 400; add against a nonexistent cart id returns 404 `56c1c10`
+- [x] Task: Add `AddItemRequest(sku: String, quantity: Int)` case class + circe codec `56c1c10`
+- [x] Task: Define `addItemEndpoint` (tapir, a `oneOf` error output distinguishing 400 `InvalidQuantity` from 404 `CartNotFound`) and `addItemServerEndpoint`, calling `CartStore.addItem` `56c1c10` - used `oneOfVariantValueMatcher` to discriminate on the CartError value itself; quantity validation happens at the HTTP boundary before ever calling the store
+- [x] Task: Wire the new endpoint into `CartRoutes.routes` and `Main.scala`'s endpoint list `56c1c10`
+- [x] Task: Run tests, confirm green `56c1c10` - 62 passed, 0 failed
 - [ ] Task: Conductor - User Manual Verification 'POST /carts/{id}/items' (Protocol in workflow.md)
 
 ## Phase 3: DELETE /carts/{id}/items/{sku} (remove item)
