@@ -6,10 +6,10 @@ them.
 
 ## Phase 1: Error ADT + CartResponse items field
 
-- [ ] Task: Write failing tests asserting `CartResponse` serializes an `items` field and `InvalidQuantity` maps to a 400 JSON error body
-- [ ] Task: Add `InvalidQuantity` to `CartError` (alongside `CartNotFound`)
-- [ ] Task: Add `items: Map[String, Int]` to `CartResponse`; update `CartResponse.apply(entity)` to carry `entity.items` through
-- [ ] Task: Run tests, confirm green
+- [x] Task: Write failing tests asserting `CartResponse` serializes an `items` field and `InvalidQuantity` maps to a 400 JSON error body `ac62b33` - the latter tested via a throwaway ad-hoc tapir endpoint wired with `invalidQuantityOutput`, since no real endpoint uses it yet
+- [x] Task: Add `InvalidQuantity` to `CartError` (alongside `CartNotFound`) `ac62b33`
+- [x] Task: Add `items: Map[String, Int]` to `CartResponse`; update `CartResponse.apply(entity)` to carry `entity.items` through `ac62b33`
+- [x] Task: Run tests, confirm green `ac62b33` - 58 passed, 0 failed
 - [ ] Task: Conductor - User Manual Verification 'Error ADT + CartResponse items field' (Protocol in workflow.md)
 
 ## Phase 2: POST /carts/{id}/items (add item)
