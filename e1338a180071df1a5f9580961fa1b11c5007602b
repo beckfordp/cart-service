@@ -1,0 +1,29 @@
+Phase 3 (final) verification report: DELETE /carts/{id}/items/{sku} (cart-items_20261002)
+
+Automated tests: sbt scalafmtCheck test - 65 passed, 0 failed, scalafmt clean.
+Coverage: sbt coverage test coverageReport - 90.74% statement / 90.91% branch.
+
+Manual verification: run via committed script (prompt-off mode -
+.claude/prompt-off), not an interactive walkthrough.
+
+Command: ./scripts/verify-remove-item-end-to-end.sh
+
+Steps and outcomes:
+1. docker compose up -d (fresh volumes) + sbt run - cart-service boots cleanly.
+2. Built a cart with two items (widget x3, gadget x1) via the real add-item
+   endpoint.
+3. Killed and restarted the service - both items survived, proving Redis
+   persistence (not an in-process artifact).
+4. DELETE /carts/{id}/items/widget - widget removed entirely, gadget untouched.
+5. Repeating the same DELETE - 200, no-op, cart unchanged (gadget still present)
+   - confirms Redis HDEL's natural idempotency is preserved through the HTTP
+   layer, per spec.
+6. DELETE against a nonexistent cart id - 404.
+
+All checks passed. This closes out cart-items_20261002 and US-2.1: cart-service
+now supports the full add/remove-item flow the story asked for, against a real
+Redis, surviving restarts.
+
+Confirmation: equivalent to explicit user "yes" - prompt-off mode substitutes
+a deterministic, committed script for the interactive manual-verification
+question per the Phase Completion protocol.
