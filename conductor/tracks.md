@@ -5,7 +5,7 @@ This file tracks all major tracks for the project.
 - [x] **Track: US-2.1: add/remove items in a cart**
   *Link: [./tracks/cart-items_20261002/](./tracks/cart-items_20261002/)*
 
-- [ ] **Track: Backport CORS support from pure-service-generator (TD-1.2)**
+- [x] **Track: Backport CORS support from pure-service-generator (TD-1.2)**
   *Link: [./tracks/cors_20261010/](./tracks/cors_20261010/)*
 
 ---
