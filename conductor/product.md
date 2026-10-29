@@ -38,16 +38,22 @@ Postgres layer entirely.
 - `CartStore[F]`: `create`/`get`/`addItem`/`removeItem`/`setQuantity`/
   `delete`/`ping`, backed by `CartStore.redis` (redis4cats) in production,
   `CartStore.inMemory` in unit tests. No Postgres anywhere in this repo.
+- **HTTP surface**: `POST /carts` (create), `GET /carts/{id}`,
+  `DELETE /carts/{id}` (whole cart), `POST /carts/{id}/items` (add/increment
+  an item), `DELETE /carts/{id}/items/{sku}` (remove an item entirely, no-op
+  if absent). `CartStore.setQuantity` exists at the store level but isn't
+  exposed over HTTP — no story has asked for it yet.
 
 ## User stories in scope (gluon/docs/user-stories.md)
 - US-2.1 — add/remove items in a cart
 
 ## Sequencing (gluon/PLAN.md)
-- **Phase 7** (independent of the fulfillment spine — can run anytime)
+- **Phase 7** (independent of the fulfillment spine — can run anytime) —
+  **complete**
   1. ~~design the Redis cart data model and drop the generated Postgres
      layer~~ — done (`redis-cart-model_20261002`)
-  2. US-2.1 — add/remove items, built on that Redis model (in progress —
-     `cart-items_20261002`)
+  2. ~~US-2.1 — add/remove items, built on that Redis model~~ — done
+     (`cart-items_20261002`)
 
 ## Events
 None. cart-service neither publishes nor consumes Kafka events (per
