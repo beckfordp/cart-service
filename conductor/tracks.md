@@ -2,7 +2,7 @@
 
 This file tracks all major tracks for the project.
 
-- [ ] **Track: TD-15.8 — Cross-repo consistency hardening (cart-service)**
+- [x] **Track: TD-15.8 — Cross-repo consistency hardening (cart-service)**
   *Link: [./tracks/td15-cart-hardening_20261029/](./tracks/td15-cart-hardening_20261029/)*
 
 - [x] **Track: US-2.1: add/remove items in a cart**
