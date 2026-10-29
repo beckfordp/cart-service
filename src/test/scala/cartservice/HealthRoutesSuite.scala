@@ -1,6 +1,7 @@
 package cartservice
 
 import cats.effect.IO
+import cartservice.domain.CartId
 import munit.CatsEffectSuite
 import org.http4s.implicits._
 import org.http4s.{Method, Request, Status}
@@ -10,32 +11,32 @@ class HealthRoutesSuite extends CatsEffectSuite {
   private val readyStore: CartStore[IO] =
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
-      def get(id: String): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: String, sku: String, quantity: Int): IO[Option[Cart]] =
+      def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
+      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
         IO.pure(None)
-      def removeItem(id: String, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def removeItem(id: CartId, sku: String): IO[Option[Cart]] = IO.pure(None)
       def setQuantity(
-          id: String,
+          id: CartId,
           sku: String,
           quantity: Int
       ): IO[Option[Cart]] = IO.pure(None)
-      def delete(id: String): IO[Boolean] = IO.pure(false)
+      def delete(id: CartId): IO[Boolean] = IO.pure(false)
       def ping: IO[Boolean] = IO.pure(true)
     }
 
   private val notReadyStore: CartStore[IO] =
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
-      def get(id: String): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: String, sku: String, quantity: Int): IO[Option[Cart]] =
+      def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
+      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
         IO.pure(None)
-      def removeItem(id: String, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def removeItem(id: CartId, sku: String): IO[Option[Cart]] = IO.pure(None)
       def setQuantity(
-          id: String,
+          id: CartId,
           sku: String,
           quantity: Int
       ): IO[Option[Cart]] = IO.pure(None)
-      def delete(id: String): IO[Boolean] = IO.pure(false)
+      def delete(id: CartId): IO[Boolean] = IO.pure(false)
       def ping: IO[Boolean] = IO.pure(false)
     }
 

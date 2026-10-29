@@ -6,7 +6,10 @@ import com.dimafeng.testcontainers.munit.TestContainerForAll
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
+import cartservice.domain.CartId
 import munit.CatsEffectSuite
+
+import java.util.UUID
 import org.typelevel.log4cats.noop.NoOpLogger
 import org.typelevel.otel4s.metrics.Meter
 import purerest.metrics.Metrics
@@ -27,7 +30,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store.create().map { entity =>
-            assert(entity.id.nonEmpty)
+            assert(CartId.render(entity.id).nonEmpty)
             assertEquals(entity.items, Map.empty[String, Int])
           }
         }
@@ -66,7 +69,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .get(java.util.UUID.randomUUID().toString)
+            .get(CartId.fromUuid(UUID.randomUUID()))
             .map(assertEquals(_, None))
         }
     }
@@ -107,7 +110,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .addItem(java.util.UUID.randomUUID().toString, "sku-1", 1)
+            .addItem(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
             .map(assertEquals(_, None))
         }
     }
@@ -136,7 +139,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .removeItem(java.util.UUID.randomUUID().toString, "sku-1")
+            .removeItem(CartId.fromUuid(UUID.randomUUID()), "sku-1")
             .map(assertEquals(_, None))
         }
     }
@@ -179,7 +182,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .setQuantity(java.util.UUID.randomUUID().toString, "sku-1", 1)
+            .setQuantity(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
             .map(assertEquals(_, None))
         }
     }
@@ -208,7 +211,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .delete(java.util.UUID.randomUUID().toString)
+            .delete(CartId.fromUuid(UUID.randomUUID()))
             .map(deleted => assert(!deleted))
         }
     }

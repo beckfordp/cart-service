@@ -2,6 +2,7 @@ package cartservice
 
 import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all._
+import cartservice.domain.CartId
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
@@ -14,7 +15,7 @@ import java.util.UUID
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
 
 final case class Cart(
-    id: String,
+    id: CartId,
     items: Map[String, Int],
     createdAt: java.time.Instant,
     updatedAt: java.time.Instant
@@ -22,30 +23,32 @@ final case class Cart(
 
 trait CartStore[F[_]] {
   def create(): F[Cart]
-  def get(id: String): F[Option[Cart]]
-  def addItem(id: String, sku: String, quantity: Int): F[Option[Cart]]
-  def removeItem(id: String, sku: String): F[Option[Cart]]
-  def setQuantity(id: String, sku: String, quantity: Int): F[Option[Cart]]
-  def delete(id: String): F[Boolean]
+  def get(id: CartId): F[Option[Cart]]
+  def addItem(id: CartId, sku: String, quantity: Int): F[Option[Cart]]
+  def removeItem(id: CartId, sku: String): F[Option[Cart]]
+  def setQuantity(id: CartId, sku: String, quantity: Int): F[Option[Cart]]
+  def delete(id: CartId): F[Boolean]
   def ping: F[Boolean]
 }
 
 object CartStore {
 
   def inMemory[F[_]: Sync]: F[CartStore[F]] =
-    Ref.of[F, Map[String, Cart]](Map.empty).map { ref =>
+    Ref.of[F, Map[CartId, Cart]](Map.empty).map { ref =>
       new CartStore[F] {
         def create(): F[Cart] =
           for {
-            id <- Sync[F].delay(java.util.UUID.randomUUID().toString)
+            id <- Sync[F].delay(
+              CartId.fromUuid(java.util.UUID.randomUUID())
+            )
             now <- Sync[F].realTimeInstant
             entity = Cart(id, Map.empty, now, now)
             _ <- ref.update(_ + (id -> entity))
           } yield entity
 
-        def get(id: String): F[Option[Cart]] = ref.get.map(_.get(id))
+        def get(id: CartId): F[Option[Cart]] = ref.get.map(_.get(id))
 
-        def addItem(id: String, sku: String, quantity: Int): F[Option[Cart]] =
+        def addItem(id: CartId, sku: String, quantity: Int): F[Option[Cart]] =
           for {
             now <- Sync[F].realTimeInstant
             updated <- ref.modify { entities =>
@@ -62,7 +65,7 @@ object CartStore {
             }
           } yield updated
 
-        def removeItem(id: String, sku: String): F[Option[Cart]] =
+        def removeItem(id: CartId, sku: String): F[Option[Cart]] =
           for {
             now <- Sync[F].realTimeInstant
             updated <- ref.modify { entities =>
@@ -77,7 +80,7 @@ object CartStore {
           } yield updated
 
         def setQuantity(
-            id: String,
+            id: CartId,
             sku: String,
             quantity: Int
         ): F[Option[Cart]] =
@@ -96,7 +99,7 @@ object CartStore {
             }
           } yield updated
 
-        def delete(id: String): F[Boolean] =
+        def delete(id: CartId): F[Boolean] =
           ref.modify { entities =>
             if (entities.contains(id)) (entities - id, true)
             else (entities, false)
@@ -109,9 +112,9 @@ object CartStore {
   private val createdAtField = "__created_at"
   private val updatedAtField = "__updated_at"
 
-  private def keyFor(id: String): String = s"cart:$id"
+  private def keyFor(id: CartId): String = s"cart:$id"
 
-  private def parseCart(id: String, fields: Map[String, String]): Option[Cart] =
+  private def parseCart(id: CartId, fields: Map[String, String]): Option[Cart] =
     for {
       createdAtStr <- fields.get(createdAtField)
       updatedAtStr <- fields.get(updatedAtField)
@@ -163,7 +166,7 @@ object CartStore {
             } yield a
 
           new CartStore[F] {
-            private def getCart(id: String): F[Option[Cart]] =
+            private def getCart(id: CartId): F[Option[Cart]] =
               timed("hgetall") {
                 commands.hGetAll(keyFor(id)).map { fields =>
                   if (fields.isEmpty) None else parseCart(id, fields)
@@ -171,7 +174,7 @@ object CartStore {
               }
 
             private def mutateIfExists(
-                id: String,
+                id: CartId,
                 operation: String
             )(mutate: F[Unit]): F[Option[Cart]] = {
               val key = keyFor(id)
@@ -202,7 +205,9 @@ object CartStore {
 
             def create(): F[Cart] =
               for {
-                id <- Sync[F].delay(UUID.randomUUID().toString)
+                id <- Sync[F].delay(
+                  CartId.fromUuid(UUID.randomUUID())
+                )
                 now <- Sync[F].realTimeInstant
                 key = keyFor(id)
                 _ <- timed("hset") {
@@ -217,10 +222,10 @@ object CartStore {
                 _ <- commands.expire(key, ttl)
               } yield Cart(id, Map.empty, now, now)
 
-            def get(id: String): F[Option[Cart]] = getCart(id)
+            def get(id: CartId): F[Option[Cart]] = getCart(id)
 
             def addItem(
-                id: String,
+                id: CartId,
                 sku: String,
                 quantity: Int
             ): F[Option[Cart]] =
@@ -228,13 +233,13 @@ object CartStore {
                 commands.hIncrBy(keyFor(id), sku, quantity.toLong).void
               }
 
-            def removeItem(id: String, sku: String): F[Option[Cart]] =
+            def removeItem(id: CartId, sku: String): F[Option[Cart]] =
               mutateIfExists(id, "hdel") {
                 commands.hDel(keyFor(id), sku).void
               }
 
             def setQuantity(
-                id: String,
+                id: CartId,
                 sku: String,
                 quantity: Int
             ): F[Option[Cart]] =
@@ -247,7 +252,7 @@ object CartStore {
                   commands.hSet(keyFor(id), sku, quantity.toString).void
                 }
 
-            def delete(id: String): F[Boolean] =
+            def delete(id: CartId): F[Boolean] =
               timed("del")(commands.del(keyFor(id)).map(_ > 0))
 
             def ping: F[Boolean] =

@@ -1,7 +1,10 @@
 package cartservice
 
 import cats.effect.IO
+import cartservice.domain.CartId
 import munit.CatsEffectSuite
+
+import java.util.UUID
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.implicits._
 import org.http4s.{Method, Request, Status}
@@ -18,9 +21,11 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 class CartRoutesSuite extends CatsEffectSuite {
 
+  private val unknownCartId = java.util.UUID.randomUUID().toString
+
   test("CartResponse carries a cart's items through from the entity") {
     val entity = Cart(
-      id = "cart-1",
+      id = CartId.fromUuid(UUID.randomUUID()),
       items = Map("sku-1" -> 2, "sku-2" -> 5),
       createdAt = java.time.Instant.parse("2026-01-01T00:00:00Z"),
       updatedAt = java.time.Instant.parse("2026-01-01T00:00:00Z")
@@ -56,17 +61,17 @@ class CartRoutesSuite extends CatsEffectSuite {
   private def failingStore(error: Throwable): CartStore[IO] =
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(error)
-      def get(id: String): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: String, sku: String, quantity: Int): IO[Option[Cart]] =
+      def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
+      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
         IO.raiseError(error)
-      def removeItem(id: String, sku: String): IO[Option[Cart]] =
+      def removeItem(id: CartId, sku: String): IO[Option[Cart]] =
         IO.raiseError(error)
       def setQuantity(
-          id: String,
+          id: CartId,
           sku: String,
           quantity: Int
       ): IO[Option[Cart]] = IO.raiseError(error)
-      def delete(id: String): IO[Boolean] = IO.raiseError(error)
+      def delete(id: CartId): IO[Boolean] = IO.raiseError(error)
       def ping: IO[Boolean] = IO.raiseError(error)
     }
 
@@ -142,7 +147,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       store <- CartStore.inMemory[IO]
       routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
       response <- routes.orNotFound.run(
-        Request[IO](Method.POST, uri"/carts" / "unknown-id" / "items")
+        Request[IO](Method.POST, uri"/carts" / unknownCartId / "items")
           .withEntity(AddItemRequest("sku-1", 1))
       )
       body <- response.as[io.circe.Json]
@@ -210,7 +215,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       response <- routes.orNotFound.run(
         Request[IO](
           Method.DELETE,
-          uri"/carts" / "unknown-id" / "items" / "sku-1"
+          uri"/carts" / unknownCartId / "items" / "sku-1"
         )
       )
       body <- response.as[io.circe.Json]
@@ -261,7 +266,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       store <- CartStore.inMemory[IO]
       routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
       response <- routes.orNotFound.run(
-        Request[IO](Method.GET, uri"/carts" / "unknown-id")
+        Request[IO](Method.GET, uri"/carts" / unknownCartId)
       )
       body <- response.as[io.circe.Json]
     } yield {
@@ -323,6 +328,16 @@ class CartRoutesSuite extends CatsEffectSuite {
     }
   }
 
+  test("GET /carts/{id} returns 400 for a malformed (non-UUID) id") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      response <- routes.orNotFound.run(
+        Request[IO](Method.GET, uri"/carts" / "not-a-uuid")
+      )
+    } yield assertEquals(response.status, Status.BadRequest)
+  }
+
   test(
     "GET /carts/{id} logs a received-request line and a completed line for a found entity"
   ) {
@@ -368,7 +383,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       testLogger = StructuredTestingLogger.impl[IO]()
       routes = CartRoutes.routes[IO](store, testLogger)
       response <- routes.orNotFound.run(
-        Request[IO](Method.GET, uri"/carts" / "unknown-id")
+        Request[IO](Method.GET, uri"/carts" / unknownCartId)
       )
       logged <- testLogger.logged
     } yield {
@@ -377,7 +392,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       assert(
         warns.exists(m =>
           m.message.toLowerCase.contains("not found") &&
-            m.ctx.get("cart_id").contains("unknown-id")
+            m.ctx.get("cart_id").contains(unknownCartId)
         ),
         s"expected a 'not found' WARN line with id context, got: $warns"
       )
@@ -413,7 +428,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       store <- CartStore.inMemory[IO]
       routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
       response <- routes.orNotFound.run(
-        Request[IO](Method.DELETE, uri"/carts" / "unknown-id")
+        Request[IO](Method.DELETE, uri"/carts" / unknownCartId)
       )
       body <- response.as[io.circe.Json]
     } yield {
@@ -468,7 +483,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       testLogger = StructuredTestingLogger.impl[IO]()
       routes = CartRoutes.routes[IO](store, testLogger)
       response <- routes.orNotFound.run(
-        Request[IO](Method.DELETE, uri"/carts" / "unknown-id")
+        Request[IO](Method.DELETE, uri"/carts" / unknownCartId)
       )
       logged <- testLogger.logged
     } yield {
@@ -477,7 +492,7 @@ class CartRoutesSuite extends CatsEffectSuite {
       assert(
         warns.exists(m =>
           m.message.toLowerCase.contains("not found") &&
-            m.ctx.get("cart_id").contains("unknown-id")
+            m.ctx.get("cart_id").contains(unknownCartId)
         ),
         s"expected a 'not found' WARN line with id context, got: $warns"
       )

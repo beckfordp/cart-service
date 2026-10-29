@@ -1,7 +1,10 @@
 package cartservice
 
 import cats.effect.IO
+import cartservice.domain.CartId
 import munit.CatsEffectSuite
+
+import java.util.UUID
 
 class CartStoreSuite extends CatsEffectSuite {
 
@@ -10,7 +13,7 @@ class CartStoreSuite extends CatsEffectSuite {
       store <- CartStore.inMemory[IO]
       entity <- store.create()
     } yield {
-      assert(entity.id.nonEmpty)
+      assert(CartId.render(entity.id).nonEmpty)
       assertEquals(entity.items, Map.empty[String, Int])
     }
   }
@@ -34,7 +37,7 @@ class CartStoreSuite extends CatsEffectSuite {
   test("get returns None for an unknown id") {
     for {
       store <- CartStore.inMemory[IO]
-      found <- store.get("unknown-id")
+      found <- store.get(CartId.fromUuid(UUID.randomUUID()))
     } yield assertEquals(found, None)
   }
 
@@ -71,7 +74,7 @@ class CartStoreSuite extends CatsEffectSuite {
   test("addItem returns None for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
-      result <- store.addItem("unknown-id", "sku-1", 1)
+      result <- store.addItem(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
     } yield assertEquals(result, None)
   }
 
@@ -96,7 +99,7 @@ class CartStoreSuite extends CatsEffectSuite {
   test("removeItem returns None for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
-      result <- store.removeItem("unknown-id", "sku-1")
+      result <- store.removeItem(CartId.fromUuid(UUID.randomUUID()), "sku-1")
     } yield assertEquals(result, None)
   }
 
@@ -130,7 +133,11 @@ class CartStoreSuite extends CatsEffectSuite {
   test("setQuantity returns None for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
-      result <- store.setQuantity("unknown-id", "sku-1", 1)
+      result <- store.setQuantity(
+        CartId.fromUuid(UUID.randomUUID()),
+        "sku-1",
+        1
+      )
     } yield assertEquals(result, None)
   }
 
@@ -149,7 +156,7 @@ class CartStoreSuite extends CatsEffectSuite {
   test("delete returns false for an unknown id") {
     for {
       store <- CartStore.inMemory[IO]
-      deleted <- store.delete("unknown-id")
+      deleted <- store.delete(CartId.fromUuid(UUID.randomUUID()))
     } yield assert(!deleted)
   }
 

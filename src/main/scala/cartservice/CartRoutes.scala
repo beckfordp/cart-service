@@ -1,8 +1,10 @@
 package cartservice
 
+import cats.{Monad, MonadThrow}
 import cats.effect.Async
 import cats.syntax.all._
 import io.circe.Codec
+import cartservice.domain.CartId
 import io.circe.generic.semiauto.deriveCodec
 import org.http4s.HttpRoutes
 import org.typelevel.log4cats.StructuredLogger
@@ -24,7 +26,12 @@ object CartResponse {
   implicit val codec: Codec[CartResponse] = deriveCodec
 
   def apply(entity: Cart): CartResponse =
-    CartResponse(entity.id, entity.items, entity.createdAt, entity.updatedAt)
+    CartResponse(
+      CartId.render(entity.id),
+      entity.items,
+      entity.createdAt,
+      entity.updatedAt
+    )
 }
 
 final case class ErrorResponse(error: String)
@@ -61,19 +68,19 @@ object CartRoutes {
       )
 
   private val getCartEndpoint: PublicEndpoint[
-    String,
+    CartId,
     CartError,
     CartResponse,
     Any
   ] =
     endpoint.get
-      .in("carts" / path[String]("id"))
+      .in("carts" / path[CartId]("id"))
       .out(jsonBody[CartResponse])
       .errorOut(notFoundOutput)
 
-  private val deleteCartEndpoint: PublicEndpoint[String, CartError, Unit, Any] =
+  private val deleteCartEndpoint: PublicEndpoint[CartId, CartError, Unit, Any] =
     endpoint.delete
-      .in("carts" / path[String]("id"))
+      .in("carts" / path[CartId]("id"))
       .out(statusCode(StatusCode.NoContent))
       .errorOut(notFoundOutput)
 
@@ -86,29 +93,29 @@ object CartRoutes {
     )
 
   private val addItemEndpoint: PublicEndpoint[
-    (String, AddItemRequest),
+    (CartId, AddItemRequest),
     CartError,
     CartResponse,
     Any
   ] =
     endpoint.post
-      .in("carts" / path[String]("id") / "items")
+      .in("carts" / path[CartId]("id") / "items")
       .in(jsonBody[AddItemRequest])
       .out(jsonBody[CartResponse])
       .errorOut(addItemErrorOutput)
 
   private val removeItemEndpoint: PublicEndpoint[
-    (String, String),
+    (CartId, String),
     CartError,
     CartResponse,
     Any
   ] =
     endpoint.delete
-      .in("carts" / path[String]("id") / "items" / path[String]("sku"))
+      .in("carts" / path[CartId]("id") / "items" / path[String]("sku"))
       .out(jsonBody[CartResponse])
       .errorOut(notFoundOutput)
 
-  def serverEndpoint[F[_]: Async](
+  def serverEndpoint[F[_]: MonadThrow](
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
@@ -126,58 +133,66 @@ object CartRoutes {
             logger.error(Map.empty, error)("Persisting the cart failed")
           }
         _ <- logger.info(
-          Map("cart_id" -> entity.id)
+          Map("cart_id" -> CartId.render(entity.id))
         )("Request completed")
       } yield CartResponse(entity)
     }
 
-  def getCartServerEndpoint[F[_]: Async](
+  def getCartServerEndpoint[F[_]: Monad](
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
     getCartEndpoint.serverLogic[F] { id =>
       for {
         _ <- logger.info(
-          Map("method" -> "GET", "path" -> s"/carts/$id", "cart_id" -> id)
+          Map(
+            "method" -> "GET",
+            "path" -> s"/carts/$id",
+            "cart_id" -> CartId.render(id)
+          )
         )(
           "Received request"
         )
         result <- store.get(id).flatMap {
           case Some(entity) =>
             logger
-              .info(Map("cart_id" -> id))("Request completed")
+              .info(Map("cart_id" -> CartId.render(id)))("Request completed")
               .as(Right(CartResponse(entity)))
           case None =>
             logger
-              .warn(Map("cart_id" -> id))("Cart not found")
+              .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
               .as(Left(CartNotFound))
         }
       } yield result
     }
 
-  def deleteCartServerEndpoint[F[_]: Async](
+  def deleteCartServerEndpoint[F[_]: Monad](
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
     deleteCartEndpoint.serverLogic[F] { id =>
       for {
         _ <- logger.info(
-          Map("method" -> "DELETE", "path" -> s"/carts/$id", "cart_id" -> id)
+          Map(
+            "method" -> "DELETE",
+            "path" -> s"/carts/$id",
+            "cart_id" -> CartId.render(id)
+          )
         )("Received request")
         result <- store.delete(id).flatMap {
           case true =>
             logger
-              .info(Map("cart_id" -> id))("Request completed")
+              .info(Map("cart_id" -> CartId.render(id)))("Request completed")
               .as(Right(()))
           case false =>
             logger
-              .warn(Map("cart_id" -> id))("Cart not found")
+              .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
               .as(Left(CartNotFound))
         }
       } yield result
     }
 
-  def addItemServerEndpoint[F[_]: Async](
+  def addItemServerEndpoint[F[_]: Monad](
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
@@ -187,29 +202,31 @@ object CartRoutes {
           Map(
             "method" -> "POST",
             "path" -> s"/carts/$id/items",
-            "cart_id" -> id
+            "cart_id" -> CartId.render(id)
           )
         )("Received request")
         result <-
           if (req.quantity <= 0)
             logger
-              .warn(Map("cart_id" -> id))("Invalid quantity")
+              .warn(Map("cart_id" -> CartId.render(id)))("Invalid quantity")
               .as(Left(InvalidQuantity))
           else
             store.addItem(id, req.sku, req.quantity).flatMap {
               case Some(entity) =>
                 logger
-                  .info(Map("cart_id" -> id))("Request completed")
+                  .info(Map("cart_id" -> CartId.render(id)))(
+                    "Request completed"
+                  )
                   .as(Right(CartResponse(entity)))
               case None =>
                 logger
-                  .warn(Map("cart_id" -> id))("Cart not found")
+                  .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
                   .as(Left(CartNotFound))
             }
       } yield result
     }
 
-  def removeItemServerEndpoint[F[_]: Async](
+  def removeItemServerEndpoint[F[_]: Monad](
       store: CartStore[F],
       logger: StructuredLogger[F]
   ): ServerEndpoint[Any, F] =
@@ -219,17 +236,17 @@ object CartRoutes {
           Map(
             "method" -> "DELETE",
             "path" -> s"/carts/$id/items/$sku",
-            "cart_id" -> id
+            "cart_id" -> CartId.render(id)
           )
         )("Received request")
         result <- store.removeItem(id, sku).flatMap {
           case Some(entity) =>
             logger
-              .info(Map("cart_id" -> id))("Request completed")
+              .info(Map("cart_id" -> CartId.render(id)))("Request completed")
               .as(Right(CartResponse(entity)))
           case None =>
             logger
-              .warn(Map("cart_id" -> id))("Cart not found")
+              .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
               .as(Left(CartNotFound))
         }
       } yield result
