@@ -12,7 +12,9 @@ import munit.CatsEffectSuite
 import java.util.UUID
 import org.typelevel.log4cats.noop.NoOpLogger
 import org.typelevel.otel4s.metrics.Meter
-import purerest.metrics.Metrics
+import purerest.metrics.{LatencyBuckets, Metrics}
+
+import scala.jdk.CollectionConverters._
 
 class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
 
@@ -269,6 +271,12 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
                 data.isDefined,
                 s"expected a db.client.operation.duration series, got: $metrics"
               )
+              data.get.getHistogramData.getPoints.asScala.foreach { point =>
+                assertEquals(
+                  point.getBoundaries.asScala.map(_.doubleValue).toVector,
+                  LatencyBuckets.seconds.boundaries
+                )
+              }
             }
           }
       }

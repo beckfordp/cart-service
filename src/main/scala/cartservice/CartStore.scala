@@ -9,6 +9,7 @@ import dev.profunktor.redis4cats.log4cats.log4CatsInstance
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.metrics.Meter
+import purerest.metrics.LatencyBuckets
 
 import java.time.Instant
 import java.util.UUID
@@ -143,6 +144,7 @@ object CartStore {
       meter
         .histogram[Double]("db.client.operation.duration")
         .withUnit("s")
+        .withExplicitBucketBoundaries(LatencyBuckets.seconds)
         .create
         .map { histogram =>
           def timed[A](operation: String)(fa: F[A]): F[A] =

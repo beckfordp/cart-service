@@ -13,7 +13,7 @@ val testcontainersScalaVersion = "0.43.6"
 val redis4catsVersion = "2.0.6"
 // Pinned to match the purerestlib version this service is built against — see
 // README's "Consuming purerest as a dependency" section.
-val purerestlibVersion = "0.1.0"
+val purerestlibVersion = "0.4.0"
 
 lazy val root = project
   .in(file("."))
