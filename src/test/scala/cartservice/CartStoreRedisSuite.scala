@@ -6,7 +6,14 @@ import com.dimafeng.testcontainers.munit.TestContainerForAll
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
-import cartservice.domain.{Cart, CartId}
+import cartservice.CartFixtures.{qty, sku, target}
+import cartservice.domain.{
+  Cart,
+  CartId,
+  CartNotFound,
+  InvalidQuantity,
+  Quantity
+}
 import munit.CatsEffectSuite
 
 import java.util.UUID
@@ -84,8 +91,8 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           for {
             created <- store.create()
-            updated <- store.addItem(created.id, "sku-1", 3)
-          } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 3)))
+            updated <- store.addItem(created.id, sku("sku-1"), qty(3))
+          } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 3)))
         }
     }
   }
@@ -99,9 +106,9 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           for {
             created <- store.create()
-            _ <- store.addItem(created.id, "sku-1", 3)
-            updated <- store.addItem(created.id, "sku-1", 2)
-          } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 5)))
+            _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+            updated <- store.addItem(created.id, sku("sku-1"), qty(2))
+          } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 5)))
         }
     }
   }
@@ -112,8 +119,8 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .addItem(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
-            .map(assertEquals(_, None))
+            .addItem(CartId.fromUuid(UUID.randomUUID()), sku("sku-1"), qty(1))
+            .map(assertEquals(_, Left(CartNotFound)))
         }
     }
   }
@@ -125,11 +132,11 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           for {
             created <- store.create()
-            _ <- store.addItem(created.id, "sku-1", 5)
-            updated <- store.removeItem(created.id, "sku-1")
+            _ <- store.addItem(created.id, sku("sku-1"), qty(5))
+            updated <- store.removeItem(created.id, sku("sku-1"))
           } yield assertEquals(
             updated.map(_.items),
-            Some(Map.empty[String, Int])
+            Right(Map.empty[String, Int])
           )
         }
     }
@@ -141,8 +148,8 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .removeItem(CartId.fromUuid(UUID.randomUUID()), "sku-1")
-            .map(assertEquals(_, None))
+            .removeItem(CartId.fromUuid(UUID.randomUUID()), sku("sku-1"))
+            .map(assertEquals(_, Left(CartNotFound)))
         }
     }
   }
@@ -154,9 +161,9 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           for {
             created <- store.create()
-            _ <- store.addItem(created.id, "sku-1", 3)
-            updated <- store.setQuantity(created.id, "sku-1", 10)
-          } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 10)))
+            _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+            updated <- store.setQuantity(created.id, sku("sku-1"), target(10))
+          } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 10)))
         }
     }
   }
@@ -168,11 +175,11 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           for {
             created <- store.create()
-            _ <- store.addItem(created.id, "sku-1", 3)
-            updated <- store.setQuantity(created.id, "sku-1", 0)
+            _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+            updated <- store.setQuantity(created.id, sku("sku-1"), target(0))
           } yield assertEquals(
             updated.map(_.items),
-            Some(Map.empty[String, Int])
+            Right(Map.empty[String, Int])
           )
         }
     }
@@ -184,8 +191,12 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
         .use { store =>
           store
-            .setQuantity(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
-            .map(assertEquals(_, None))
+            .setQuantity(
+              CartId.fromUuid(UUID.randomUUID()),
+              sku("sku-1"),
+              target(1)
+            )
+            .map(assertEquals(_, Left(CartNotFound)))
         }
     }
   }
@@ -200,7 +211,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
             deleted <- store.delete(created.id)
             found <- store.get(created.id)
           } yield {
-            assert(deleted)
+            assertEquals(deleted, Right(()))
             assertEquals(found, None)
           }
         }
@@ -214,7 +225,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
         .use { store =>
           store
             .delete(CartId.fromUuid(UUID.randomUUID()))
-            .map(deleted => assert(!deleted))
+            .map(deleted => assertEquals(deleted, Left(CartNotFound)))
         }
     }
   }
@@ -241,7 +252,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
             .use { store =>
               for {
                 created <- store.create()
-                _ <- store.addItem(created.id, "sku-1", 1)
+                _ <- store.addItem(created.id, sku("sku-1"), qty(1))
               } yield created.id
             }
         ttl <- Redis[IO].utf8(redis.redisUri).use(_.ttl(s"cart:$cartId"))

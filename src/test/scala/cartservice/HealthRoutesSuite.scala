@@ -1,7 +1,7 @@
 package cartservice
 
 import cats.effect.IO
-import cartservice.domain.{Cart, CartId}
+import cartservice.domain.{Cart, CartError, CartId, CartNotFound, Quantity, Sku}
 import munit.CatsEffectSuite
 import org.http4s.implicits._
 import org.http4s.{Method, Request, Status}
@@ -12,15 +12,23 @@ class HealthRoutesSuite extends CatsEffectSuite {
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
       def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
-        IO.pure(None)
-      def removeItem(id: CartId, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def addItem(
+          id: CartId,
+          sku: Sku,
+          quantity: Quantity
+      ): IO[Either[CartError, Cart]] = IO.pure(Left(CartNotFound))
+      def removeItem(
+          id: CartId,
+          sku: Sku
+      ): IO[Either[CartNotFound.type, Cart]] =
+        IO.pure(Left(CartNotFound))
       def setQuantity(
           id: CartId,
-          sku: String,
-          quantity: Int
-      ): IO[Option[Cart]] = IO.pure(None)
-      def delete(id: CartId): IO[Boolean] = IO.pure(false)
+          sku: Sku,
+          target: Option[Quantity]
+      ): IO[Either[CartNotFound.type, Cart]] = IO.pure(Left(CartNotFound))
+      def delete(id: CartId): IO[Either[CartNotFound.type, Unit]] =
+        IO.pure(Left(CartNotFound))
       def ping: IO[Boolean] = IO.pure(true)
     }
 
@@ -28,15 +36,23 @@ class HealthRoutesSuite extends CatsEffectSuite {
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(new NotImplementedError())
       def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
-        IO.pure(None)
-      def removeItem(id: CartId, sku: String): IO[Option[Cart]] = IO.pure(None)
+      def addItem(
+          id: CartId,
+          sku: Sku,
+          quantity: Quantity
+      ): IO[Either[CartError, Cart]] = IO.pure(Left(CartNotFound))
+      def removeItem(
+          id: CartId,
+          sku: Sku
+      ): IO[Either[CartNotFound.type, Cart]] =
+        IO.pure(Left(CartNotFound))
       def setQuantity(
           id: CartId,
-          sku: String,
-          quantity: Int
-      ): IO[Option[Cart]] = IO.pure(None)
-      def delete(id: CartId): IO[Boolean] = IO.pure(false)
+          sku: Sku,
+          target: Option[Quantity]
+      ): IO[Either[CartNotFound.type, Cart]] = IO.pure(Left(CartNotFound))
+      def delete(id: CartId): IO[Either[CartNotFound.type, Unit]] =
+        IO.pure(Left(CartNotFound))
       def ping: IO[Boolean] = IO.pure(false)
     }
 

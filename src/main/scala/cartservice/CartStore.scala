@@ -1,8 +1,9 @@
 package cartservice
 
-import cats.effect.{Async, Ref, Resource, Sync}
+import cats.effect.{Async, Clock, Concurrent, Ref, Resource, Sync}
+import cats.effect.std.UUIDGen
 import cats.syntax.all._
-import cartservice.domain.{Cart, CartId}
+import cartservice.domain.{Cart, CartError, CartId, CartNotFound, Quantity, Sku}
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
@@ -12,94 +13,88 @@ import org.typelevel.otel4s.metrics.Meter
 import purerest.metrics.LatencyBuckets
 
 import java.time.Instant
-import java.util.UUID
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
 
 trait CartStore[F[_]] {
   def create(): F[Cart]
   def get(id: CartId): F[Option[Cart]]
-  def addItem(id: CartId, sku: String, quantity: Int): F[Option[Cart]]
-  def removeItem(id: CartId, sku: String): F[Option[Cart]]
-  def setQuantity(id: CartId, sku: String, quantity: Int): F[Option[Cart]]
-  def delete(id: CartId): F[Boolean]
+
+  /** `InvalidQuantity` when the line would exceed [[Quantity.Max]]. */
+  def addItem(
+      id: CartId,
+      sku: Sku,
+      quantity: Quantity
+  ): F[Either[CartError, Cart]]
+  def removeItem(id: CartId, sku: Sku): F[Either[CartNotFound.type, Cart]]
+
+  /** `None` removes the line (see [[Quantity.parseTarget]]). */
+  def setQuantity(
+      id: CartId,
+      sku: Sku,
+      target: Option[Quantity]
+  ): F[Either[CartNotFound.type, Cart]]
+  def delete(id: CartId): F[Either[CartNotFound.type, Unit]]
   def ping: F[Boolean]
 }
 
 object CartStore {
 
-  def inMemory[F[_]: Sync]: F[CartStore[F]] =
+  def inMemory[F[_]: Concurrent: Clock: UUIDGen]: F[CartStore[F]] =
     Ref.of[F, Map[CartId, Cart]](Map.empty).map { ref =>
       new CartStore[F] {
+
+        /** Applies a pure core operation to an existing cart atomically. */
+        private def modify[E >: CartNotFound.type](id: CartId)(
+            op: (Cart, Instant) => Either[E, Cart]
+        ): F[Either[E, Cart]] =
+          Clock[F].realTimeInstant.flatMap { now =>
+            ref.modify { carts =>
+              carts.get(id).toRight[E](CartNotFound).flatMap(op(_, now)) match {
+                case Right(next) => (carts + (id -> next), Right(next))
+                case Left(error) => (carts, Left(error))
+              }
+            }
+          }
+
         def create(): F[Cart] =
           for {
-            id <- Sync[F].delay(
-              CartId.fromUuid(java.util.UUID.randomUUID())
-            )
-            now <- Sync[F].realTimeInstant
-            entity = Cart(id, Map.empty, now, now)
-            _ <- ref.update(_ + (id -> entity))
-          } yield entity
+            id <- UUIDGen[F].randomUUID.map(CartId.fromUuid)
+            now <- Clock[F].realTimeInstant
+            cart = Cart.empty(id, now)
+            _ <- ref.update(_ + (id -> cart))
+          } yield cart
 
         def get(id: CartId): F[Option[Cart]] = ref.get.map(_.get(id))
 
-        def addItem(id: CartId, sku: String, quantity: Int): F[Option[Cart]] =
-          for {
-            now <- Sync[F].realTimeInstant
-            updated <- ref.modify { entities =>
-              entities.get(id) match {
-                case None           => (entities, None)
-                case Some(existing) =>
-                  val newQuantity = existing.items.getOrElse(sku, 0) + quantity
-                  val next = existing.copy(
-                    items = existing.items + (sku -> newQuantity),
-                    updatedAt = now
-                  )
-                  (entities + (id -> next), Some(next))
-              }
-            }
-          } yield updated
+        def addItem(
+            id: CartId,
+            sku: Sku,
+            quantity: Quantity
+        ): F[Either[CartError, Cart]] =
+          modify(id)(Cart.addItem(_, sku, quantity, _))
 
-        def removeItem(id: CartId, sku: String): F[Option[Cart]] =
-          for {
-            now <- Sync[F].realTimeInstant
-            updated <- ref.modify { entities =>
-              entities.get(id) match {
-                case None           => (entities, None)
-                case Some(existing) =>
-                  val next =
-                    existing.copy(items = existing.items - sku, updatedAt = now)
-                  (entities + (id -> next), Some(next))
-              }
-            }
-          } yield updated
+        def removeItem(
+            id: CartId,
+            sku: Sku
+        ): F[Either[CartNotFound.type, Cart]] =
+          modify(id)((cart, now) => Right(Cart.removeItem(cart, sku, now)))
 
         def setQuantity(
             id: CartId,
-            sku: String,
-            quantity: Int
-        ): F[Option[Cart]] =
-          for {
-            now <- Sync[F].realTimeInstant
-            updated <- ref.modify { entities =>
-              entities.get(id) match {
-                case None           => (entities, None)
-                case Some(existing) =>
-                  val newItems =
-                    if (quantity <= 0) existing.items - sku
-                    else existing.items + (sku -> quantity)
-                  val next = existing.copy(items = newItems, updatedAt = now)
-                  (entities + (id -> next), Some(next))
-              }
-            }
-          } yield updated
+            sku: Sku,
+            target: Option[Quantity]
+        ): F[Either[CartNotFound.type, Cart]] =
+          modify(id)((cart, now) =>
+            Right(Cart.setQuantity(cart, sku, target, now))
+          )
 
-        def delete(id: CartId): F[Boolean] =
-          ref.modify { entities =>
-            if (entities.contains(id)) (entities - id, true)
-            else (entities, false)
+        def delete(id: CartId): F[Either[CartNotFound.type, Unit]] =
+          ref.modify { carts =>
+            if (carts.contains(id)) (carts - id, Right(()))
+            else (carts, Left(CartNotFound))
           }
 
-        def ping: F[Boolean] = Sync[F].pure(true)
+        def ping: F[Boolean] = Concurrent[F].pure(true)
       }
     }
 
@@ -200,10 +195,8 @@ object CartStore {
 
             def create(): F[Cart] =
               for {
-                id <- Sync[F].delay(
-                  CartId.fromUuid(UUID.randomUUID())
-                )
-                now <- Sync[F].realTimeInstant
+                id <- UUIDGen[F].randomUUID.map(CartId.fromUuid)
+                now <- Clock[F].realTimeInstant
                 key = keyFor(id)
                 _ <- timed("hset") {
                   commands.hSet(
@@ -215,40 +208,59 @@ object CartStore {
                   )
                 }
                 _ <- commands.expire(key, ttl)
-              } yield Cart(id, Map.empty, now, now)
+              } yield Cart.empty(id, now)
 
             def get(id: CartId): F[Option[Cart]] = getCart(id)
 
             def addItem(
                 id: CartId,
-                sku: String,
-                quantity: Int
-            ): F[Option[Cart]] =
+                sku: Sku,
+                quantity: Quantity
+            ): F[Either[CartError, Cart]] =
               mutateIfExists(id, "hincrby") {
-                commands.hIncrBy(keyFor(id), sku, quantity.toLong).void
-              }
+                commands
+                  .hIncrBy(
+                    keyFor(id),
+                    Sku.value(sku),
+                    Quantity.value(quantity).toLong
+                  )
+                  .void
+              }.map(_.toRight(CartNotFound))
 
-            def removeItem(id: CartId, sku: String): F[Option[Cart]] =
+            def removeItem(
+                id: CartId,
+                sku: Sku
+            ): F[Either[CartNotFound.type, Cart]] =
               mutateIfExists(id, "hdel") {
-                commands.hDel(keyFor(id), sku).void
-              }
+                commands.hDel(keyFor(id), Sku.value(sku)).void
+              }.map(_.toRight(CartNotFound))
 
             def setQuantity(
                 id: CartId,
-                sku: String,
-                quantity: Int
-            ): F[Option[Cart]] =
-              if (quantity <= 0)
-                mutateIfExists(id, "hdel") {
-                  commands.hDel(keyFor(id), sku).void
-                }
-              else
-                mutateIfExists(id, "hset") {
-                  commands.hSet(keyFor(id), sku, quantity.toString).void
-                }
+                sku: Sku,
+                target: Option[Quantity]
+            ): F[Either[CartNotFound.type, Cart]] =
+              (target match {
+                case None =>
+                  mutateIfExists(id, "hdel") {
+                    commands.hDel(keyFor(id), Sku.value(sku)).void
+                  }
+                case Some(quantity) =>
+                  mutateIfExists(id, "hset") {
+                    commands
+                      .hSet(
+                        keyFor(id),
+                        Sku.value(sku),
+                        Quantity.value(quantity).toString
+                      )
+                      .void
+                  }
+              }).map(_.toRight(CartNotFound))
 
-            def delete(id: CartId): F[Boolean] =
-              timed("del")(commands.del(keyFor(id)).map(_ > 0))
+            def delete(id: CartId): F[Either[CartNotFound.type, Unit]] =
+              timed("del")(commands.del(keyFor(id))).map { removed =>
+                Either.cond(removed > 0, (), CartNotFound)
+              }
 
             def ping: F[Boolean] =
               timed("exists")(commands.exists("__cart_ping__")).attempt

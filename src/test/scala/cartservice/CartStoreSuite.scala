@@ -1,7 +1,14 @@
 package cartservice
 
 import cats.effect.IO
-import cartservice.domain.{Cart, CartId}
+import cartservice.CartFixtures.{qty, sku, target}
+import cartservice.domain.{
+  Cart,
+  CartId,
+  CartNotFound,
+  InvalidQuantity,
+  Quantity
+}
 import munit.CatsEffectSuite
 
 import java.util.UUID
@@ -45,8 +52,8 @@ class CartStoreSuite extends CatsEffectSuite {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      updated <- store.addItem(created.id, "sku-1", 3)
-    } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 3)))
+      updated <- store.addItem(created.id, sku("sku-1"), qty(3))
+    } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 3)))
   }
 
   test(
@@ -55,16 +62,16 @@ class CartStoreSuite extends CatsEffectSuite {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 3)
-      updated <- store.addItem(created.id, "sku-1", 2)
-    } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 5)))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+      updated <- store.addItem(created.id, sku("sku-1"), qty(2))
+    } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 5)))
   }
 
   test("addItem bumps updatedAt") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      updated <- store.addItem(created.id, "sku-1", 1)
+      updated <- store.addItem(created.id, sku("sku-1"), qty(1))
     } yield assert(
       updated.exists(!_.updatedAt.isBefore(created.updatedAt)),
       s"expected updatedAt not to move backwards, got: $updated"
@@ -74,60 +81,67 @@ class CartStoreSuite extends CatsEffectSuite {
   test("addItem returns None for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
-      result <- store.addItem(CartId.fromUuid(UUID.randomUUID()), "sku-1", 1)
-    } yield assertEquals(result, None)
+      result <- store.addItem(
+        CartId.fromUuid(UUID.randomUUID()),
+        sku("sku-1"),
+        qty(1)
+      )
+    } yield assertEquals(result, Left(CartNotFound))
   }
 
   test("removeItem deletes a sku entirely, regardless of its quantity") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 5)
-      updated <- store.removeItem(created.id, "sku-1")
-    } yield assertEquals(updated.map(_.items), Some(Map.empty[String, Int]))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(5))
+      updated <- store.removeItem(created.id, sku("sku-1"))
+    } yield assertEquals(updated.map(_.items), Right(Map.empty[String, Int]))
   }
 
   test("removeItem on a sku not present in the cart is a no-op") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 2)
-      updated <- store.removeItem(created.id, "sku-2")
-    } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 2)))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(2))
+      updated <- store.removeItem(created.id, sku("sku-2"))
+    } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 2)))
   }
 
   test("removeItem returns None for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
-      result <- store.removeItem(CartId.fromUuid(UUID.randomUUID()), "sku-1")
-    } yield assertEquals(result, None)
+      result <- store.removeItem(
+        CartId.fromUuid(UUID.randomUUID()),
+        sku("sku-1")
+      )
+    } yield assertEquals(result, Left(CartNotFound))
   }
 
   test("setQuantity with a positive value sets it exactly, not additively") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 3)
-      updated <- store.setQuantity(created.id, "sku-1", 10)
-    } yield assertEquals(updated.map(_.items), Some(Map("sku-1" -> 10)))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+      updated <- store.setQuantity(created.id, sku("sku-1"), target(10))
+    } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 10)))
   }
 
   test("setQuantity with 0 removes the sku") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 3)
-      updated <- store.setQuantity(created.id, "sku-1", 0)
-    } yield assertEquals(updated.map(_.items), Some(Map.empty[String, Int]))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+      updated <- store.setQuantity(created.id, sku("sku-1"), target(0))
+    } yield assertEquals(updated.map(_.items), Right(Map.empty[String, Int]))
   }
 
   test("setQuantity with a negative value removes the sku") {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
-      _ <- store.addItem(created.id, "sku-1", 3)
-      updated <- store.setQuantity(created.id, "sku-1", -1)
-    } yield assertEquals(updated.map(_.items), Some(Map.empty[String, Int]))
+      _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+      updated <- store.setQuantity(created.id, sku("sku-1"), target(-1))
+    } yield assertEquals(updated.map(_.items), Right(Map.empty[String, Int]))
   }
 
   test("setQuantity returns None for an unknown cart id") {
@@ -135,10 +149,10 @@ class CartStoreSuite extends CatsEffectSuite {
       store <- CartStore.inMemory[IO]
       result <- store.setQuantity(
         CartId.fromUuid(UUID.randomUUID()),
-        "sku-1",
-        1
+        sku("sku-1"),
+        target(1)
       )
-    } yield assertEquals(result, None)
+    } yield assertEquals(result, Left(CartNotFound))
   }
 
   test("delete removes the cart and returns true, and get then returns None") {
@@ -148,7 +162,7 @@ class CartStoreSuite extends CatsEffectSuite {
       deleted <- store.delete(created.id)
       found <- store.get(created.id)
     } yield {
-      assert(deleted)
+      assertEquals(deleted, Right(()))
       assertEquals(found, None)
     }
   }
@@ -157,7 +171,20 @@ class CartStoreSuite extends CatsEffectSuite {
     for {
       store <- CartStore.inMemory[IO]
       deleted <- store.delete(CartId.fromUuid(UUID.randomUUID()))
-    } yield assert(!deleted)
+    } yield assertEquals(deleted, Left(CartNotFound))
+  }
+
+  test("addItem past Quantity.Max is InvalidQuantity and leaves the line") {
+    for {
+      store <- CartStore.inMemory[IO]
+      created <- store.create()
+      _ <- store.addItem(created.id, sku("sku-1"), qty(Quantity.Max))
+      over <- store.addItem(created.id, sku("sku-1"), qty(1))
+      after <- store.get(created.id)
+    } yield {
+      assertEquals(over, Left(InvalidQuantity))
+      assertEquals(after.map(_.items), Some(Map("sku-1" -> Quantity.Max)))
+    }
   }
 
   test("ping returns true") {

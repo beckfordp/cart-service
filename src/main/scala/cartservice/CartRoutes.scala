@@ -9,7 +9,10 @@ import cartservice.domain.{
   CartError,
   CartId,
   CartNotFound,
-  InvalidQuantity
+  InvalidQuantity,
+  InvalidSku,
+  Quantity,
+  Sku
 }
 import io.circe.generic.semiauto.deriveCodec
 import org.http4s.HttpRoutes
@@ -73,6 +76,11 @@ object CartRoutes {
         ErrorResponse("Invalid quantity")
       )
 
+  private val invalidSkuOutput: EndpointOutput[CartError] =
+    statusCode(StatusCode.BadRequest)
+      .and(jsonBody[ErrorResponse])
+      .map[CartError](_ => InvalidSku)(_ => ErrorResponse("Invalid sku"))
+
   private val getCartEndpoint: PublicEndpoint[
     CartId,
     CartError,
@@ -95,6 +103,7 @@ object CartRoutes {
       oneOfVariantValueMatcher(invalidQuantityOutput) { case InvalidQuantity =>
         true
       },
+      oneOfVariantValueMatcher(invalidSkuOutput) { case InvalidSku => true },
       oneOfVariantValueMatcher(notFoundOutput) { case CartNotFound => true }
     )
 
@@ -111,13 +120,13 @@ object CartRoutes {
       .errorOut(addItemErrorOutput)
 
   private val removeItemEndpoint: PublicEndpoint[
-    (CartId, String),
+    (CartId, Sku),
     CartError,
     CartResponse,
     Any
   ] =
     endpoint.delete
-      .in("carts" / path[CartId]("id") / "items" / path[String]("sku"))
+      .in("carts" / path[CartId]("id") / "items" / path[Sku]("sku"))
       .out(jsonBody[CartResponse])
       .errorOut(notFoundOutput)
 
@@ -186,11 +195,11 @@ object CartRoutes {
           )
         )("Received request")
         result <- store.delete(id).flatMap {
-          case true =>
+          case Right(()) =>
             logger
               .info(Map("cart_id" -> CartId.render(id)))("Request completed")
               .as(Right(()))
-          case false =>
+          case Left(CartNotFound) =>
             logger
               .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
               .as(Left(CartNotFound))
@@ -211,24 +220,34 @@ object CartRoutes {
             "cart_id" -> CartId.render(id)
           )
         )("Received request")
-        result <-
-          if (req.quantity <= 0)
+        result <- (
+          for {
+            sku <- Sku.parse(req.sku)
+            quantity <- Quantity.parse(req.quantity)
+          } yield (sku, quantity)
+        ) match {
+          case Left(error) =>
             logger
-              .warn(Map("cart_id" -> CartId.render(id)))("Invalid quantity")
-              .as(Left(InvalidQuantity))
-          else
-            store.addItem(id, req.sku, req.quantity).flatMap {
-              case Some(entity) =>
+              .warn(Map("cart_id" -> CartId.render(id)))(
+                s"Rejected item: $error"
+              )
+              .as(Left(error))
+          case Right((sku, quantity)) =>
+            store.addItem(id, sku, quantity).flatMap {
+              case Right(entity) =>
                 logger
                   .info(Map("cart_id" -> CartId.render(id)))(
                     "Request completed"
                   )
                   .as(Right(CartResponse(entity)))
-              case None =>
+              case Left(error) =>
                 logger
-                  .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
-                  .as(Left(CartNotFound))
+                  .warn(Map("cart_id" -> CartId.render(id)))(
+                    s"Item not added: $error"
+                  )
+                  .as(Left(error))
             }
+        }
       } yield result
     }
 
@@ -241,16 +260,16 @@ object CartRoutes {
         _ <- logger.info(
           Map(
             "method" -> "DELETE",
-            "path" -> s"/carts/$id/items/$sku",
+            "path" -> s"/carts/$id/items/${Sku.value(sku)}",
             "cart_id" -> CartId.render(id)
           )
         )("Received request")
         result <- store.removeItem(id, sku).flatMap {
-          case Some(entity) =>
+          case Right(entity) =>
             logger
               .info(Map("cart_id" -> CartId.render(id)))("Request completed")
               .as(Right(CartResponse(entity)))
-          case None =>
+          case Left(CartNotFound) =>
             logger
               .warn(Map("cart_id" -> CartId.render(id)))("Cart not found")
               .as(Left(CartNotFound))

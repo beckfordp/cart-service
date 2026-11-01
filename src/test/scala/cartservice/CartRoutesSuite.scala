@@ -1,7 +1,15 @@
 package cartservice
 
 import cats.effect.IO
-import cartservice.domain.{Cart, CartError, CartId, InvalidQuantity}
+import cartservice.domain.{
+  Cart,
+  CartError,
+  CartId,
+  CartNotFound,
+  InvalidQuantity,
+  Quantity,
+  Sku
+}
 import munit.CatsEffectSuite
 
 import java.util.UUID
@@ -62,16 +70,23 @@ class CartRoutesSuite extends CatsEffectSuite {
     new CartStore[IO] {
       def create(): IO[Cart] = IO.raiseError(error)
       def get(id: CartId): IO[Option[Cart]] = IO.pure(None)
-      def addItem(id: CartId, sku: String, quantity: Int): IO[Option[Cart]] =
-        IO.raiseError(error)
-      def removeItem(id: CartId, sku: String): IO[Option[Cart]] =
+      def addItem(
+          id: CartId,
+          sku: Sku,
+          quantity: Quantity
+      ): IO[Either[CartError, Cart]] = IO.raiseError(error)
+      def removeItem(
+          id: CartId,
+          sku: Sku
+      ): IO[Either[CartNotFound.type, Cart]] =
         IO.raiseError(error)
       def setQuantity(
           id: CartId,
-          sku: String,
-          quantity: Int
-      ): IO[Option[Cart]] = IO.raiseError(error)
-      def delete(id: CartId): IO[Boolean] = IO.raiseError(error)
+          sku: Sku,
+          target: Option[Quantity]
+      ): IO[Either[CartNotFound.type, Cart]] = IO.raiseError(error)
+      def delete(id: CartId): IO[Either[CartNotFound.type, Unit]] =
+        IO.raiseError(error)
       def ping: IO[Boolean] = IO.raiseError(error)
     }
 
@@ -114,6 +129,95 @@ class CartRoutesSuite extends CatsEffectSuite {
       )
       updated <- secondResponse.as[CartResponse]
     } yield assertEquals(updated.items, Map("sku-1" -> 5))
+  }
+
+  test("POST /carts/{id}/items rejects a reserved or blank sku with 400") {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      created <- routes.orNotFound
+        .run(Request[IO](Method.POST, uri"/carts"))
+        .flatMap(_.as[CartResponse])
+      reserved <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("__created_at", 1))
+      )
+      reservedBody <- reserved.as[io.circe.Json]
+      blank <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest(" ", 1))
+      )
+      cartAfter <- routes.orNotFound
+        .run(Request[IO](Method.GET, uri"/carts" / created.id))
+    } yield {
+      assertEquals(reserved.status, Status.BadRequest)
+      assertEquals(
+        reservedBody,
+        io.circe.Json.obj("error" -> io.circe.Json.fromString("Invalid sku"))
+      )
+      assertEquals(blank.status, Status.BadRequest)
+      assertEquals(cartAfter.status, Status.Ok)
+    }
+  }
+
+  test(
+    "DELETE /carts/{id}/items/{sku} with a reserved sku is 400 and the cart survives"
+  ) {
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      created <- routes.orNotFound
+        .run(Request[IO](Method.POST, uri"/carts"))
+        .flatMap(_.as[CartResponse])
+      removed <- routes.orNotFound.run(
+        Request[IO](
+          Method.DELETE,
+          uri"/carts" / created.id / "items" / "__created_at"
+        )
+      )
+      cartAfter <- routes.orNotFound
+        .run(Request[IO](Method.GET, uri"/carts" / created.id))
+    } yield {
+      assertEquals(removed.status, Status.BadRequest)
+      assertEquals(cartAfter.status, Status.Ok)
+    }
+  }
+
+  test(
+    "POST /carts/{id}/items above Quantity.Max, or taking a line past it, returns 400 Invalid quantity"
+  ) {
+    val invalidQuantity =
+      io.circe.Json.obj("error" -> io.circe.Json.fromString("Invalid quantity"))
+    for {
+      store <- CartStore.inMemory[IO]
+      routes = CartRoutes.routes[IO](store, NoOpLogger[IO])
+      created <- routes.orNotFound
+        .run(Request[IO](Method.POST, uri"/carts"))
+        .flatMap(_.as[CartResponse])
+      tooMany <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", Quantity.Max + 1))
+      )
+      tooManyBody <- tooMany.as[io.circe.Json]
+      _ <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", Quantity.Max))
+      )
+      past <- routes.orNotFound.run(
+        Request[IO](Method.POST, uri"/carts" / created.id / "items")
+          .withEntity(AddItemRequest("sku-1", 1))
+      )
+      pastBody <- past.as[io.circe.Json]
+      cartAfter <- routes.orNotFound
+        .run(Request[IO](Method.GET, uri"/carts" / created.id))
+        .flatMap(_.as[CartResponse])
+    } yield {
+      assertEquals(tooMany.status, Status.BadRequest)
+      assertEquals(tooManyBody, invalidQuantity)
+      assertEquals(past.status, Status.BadRequest)
+      assertEquals(pastBody, invalidQuantity)
+      assertEquals(cartAfter.items, Map("sku-1" -> Quantity.Max))
+    }
   }
 
   test("POST /carts/{id}/items with quantity <= 0 returns 400") {
