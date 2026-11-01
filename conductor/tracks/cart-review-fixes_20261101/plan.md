@@ -16,5 +16,8 @@
 - [x] Task: CORS methods narrowed (test first); README rewritten; tech-stack purerestlib synced — preflight test pins GET/POST/DELETE only; README rewritten for the Redis-backed real routes; tech-stack purerestlib 0.4.0 + Lua atomicity noted; 94/94 green bbd79a8
 - [x] Task: Conductor - User Manual Verification 'Phase 4: Low-severity cleanup' (Protocol in workflow.md) — covered by suite (94 green incl. Redis Testcontainers; scalafmtCheckAll clean)
 
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions — stale Option/Boolean test names renamed to the Either API in both store suites; `CartStore`'s public methods documented; 94/94 green d857f19
+
 **Risks:** Lua number semantics (doubles) — limit 999 keeps them exact; redis4cats
 `Multi` output on nil — scripts always return a non-empty list.
