@@ -1,7 +1,7 @@
 package cartservice
 
 import cats.effect.IO
-import cartservice.domain.CartId
+import cartservice.domain.{Cart, CartId}
 import munit.CatsEffectSuite
 import org.http4s.implicits._
 import org.http4s.{Method, Request, Status}

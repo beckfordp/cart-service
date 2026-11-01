@@ -2,7 +2,7 @@ package cartservice
 
 import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all._
-import cartservice.domain.CartId
+import cartservice.domain.{Cart, CartId}
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
@@ -14,13 +14,6 @@ import purerest.metrics.LatencyBuckets
 import java.time.Instant
 import java.util.UUID
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
-
-final case class Cart(
-    id: CartId,
-    items: Map[String, Int],
-    createdAt: java.time.Instant,
-    updatedAt: java.time.Instant
-)
 
 trait CartStore[F[_]] {
   def create(): F[Cart]

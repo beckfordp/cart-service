@@ -1,7 +1,7 @@
 package cartservice
 
 import cats.effect.IO
-import cartservice.domain.CartId
+import cartservice.domain.{Cart, CartError, CartId, InvalidQuantity}
 import munit.CatsEffectSuite
 
 import java.util.UUID

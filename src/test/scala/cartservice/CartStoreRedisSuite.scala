@@ -6,7 +6,7 @@ import com.dimafeng.testcontainers.munit.TestContainerForAll
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
-import cartservice.domain.CartId
+import cartservice.domain.{Cart, CartId}
 import munit.CatsEffectSuite
 
 import java.util.UUID

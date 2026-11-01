@@ -4,7 +4,13 @@ import cats.{Monad, MonadThrow}
 import cats.effect.Async
 import cats.syntax.all._
 import io.circe.Codec
-import cartservice.domain.CartId
+import cartservice.domain.{
+  Cart,
+  CartError,
+  CartId,
+  CartNotFound,
+  InvalidQuantity
+}
 import io.circe.generic.semiauto.deriveCodec
 import org.http4s.HttpRoutes
 import org.typelevel.log4cats.StructuredLogger

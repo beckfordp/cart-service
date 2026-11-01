@@ -5,7 +5,7 @@ This file tracks all major tracks for the project.
 - [x] **Track: US-2.1: add/remove items in a cart**
   *Link: [./tracks/cart-items_20261002/](./tracks/cart-items_20261002/)*
 
-- [ ] **Track: TD-16.5 cart-service review fixes**
+- [~] **Track: TD-16.5 cart-service review fixes**
   *Link: [./tracks/cart-review-fixes_20261101/](./tracks/cart-review-fixes_20261101/)*
 
 ---
