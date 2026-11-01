@@ -1,8 +1,8 @@
 # Plan — cart-service review fixes (gluon TD-16.5)
 
-## Phase 1: Pure domain core (FR-1)
+## Phase 1: Pure domain core (FR-1) [checkpoint: cfc0c3c]
 - [x] Task: tests first — `CartDomainSuite` (Sku/Quantity parsing, Cart add/remove/set, ScalaCheck line-range + no-overflow properties), red → `domain/Cart.scala`, `domain/Sku.scala`, `domain/Quantity.scala`, `CartError` → `domain/` + `InvalidSku`; green — 85/85 green; Cart/Sku/Quantity/CartError in domain/, InvalidSku added aa0d49e
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Pure domain core' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Pure domain core' (Protocol in workflow.md) — covered by suite (85 green)
 
 ## Phase 2: Typed store and boundary parsing (FR-2)
 - [ ] Task: tests first — store suites on `Either` results + line limit; route tests: reserved/blank body sku → 400 `Invalid sku`, reserved path sku → 400 and cart intact, over-limit add → 400 `Invalid quantity`; red → typed `CartStore` API, in-memory via core (`Concurrent`/`Clock`/`UUIDGen`), routes parse at the boundary; green
