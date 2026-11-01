@@ -5,9 +5,6 @@ This file tracks all major tracks for the project.
 - [x] **Track: US-2.1: add/remove items in a cart**
   *Link: [./tracks/cart-items_20261002/](./tracks/cart-items_20261002/)*
 
-- [ ] **Track: TD-20.8 REST docs**
-  *Link: [./tracks/rest-docs_20261101/](./tracks/rest-docs_20261101/)*
-
 ---
 
 ## Backlog
