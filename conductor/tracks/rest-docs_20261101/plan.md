@@ -15,3 +15,6 @@
 ## Phase 4: Smoke test
 - [x] Task: `scripts/verify-rest-docs.sh` — run service, fetch `/docs/docs.yaml`, assert summaries/descriptions/examples + narrowed errors; scalafmtCheck; CI green — PASS 43 checks; scalafmtCheckAll clean f243458
 - [x] Task: Conductor - User Manual Verification 'Phase 4: Smoke test' (Protocol in workflow.md) — `scripts/verify-rest-docs.sh` PASS
+
+## Phase: Review Fixes
+- [x] Task: Apply review suggestions — one Low finding: `Main.endpoints` now owns the served endpoint list and `CartDocsSuite` uses it (removes the Main/test duplication, FR7 truly "the exact list Main passes"); verify script re-run PASS f9f98e9
