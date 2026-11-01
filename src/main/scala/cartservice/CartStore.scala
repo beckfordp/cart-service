@@ -26,7 +26,11 @@ import java.time.format.DateTimeParseException
 import scala.concurrent.duration.SECONDS
 
 trait CartStore[F[_]] {
+
+  /** Persists a new empty cart with a generated id and its TTL. */
   def create(): F[Cart]
+
+  /** `None` when no cart exists (never created, deleted, or expired). */
   def get(id: CartId): F[Option[Cart]]
 
   /** `InvalidQuantity` when the line would exceed [[Quantity.Max]]. */
@@ -43,7 +47,11 @@ trait CartStore[F[_]] {
       sku: Sku,
       target: Option[Quantity]
   ): F[Either[CartNotFound.type, Cart]]
+
+  /** `CartNotFound` when the cart was already absent. */
   def delete(id: CartId): F[Either[CartNotFound.type, Unit]]
+
+  /** Whether the backing store answers at all (readiness probe). */
   def ping: F[Boolean]
 }
 

@@ -114,7 +114,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
     }
   }
 
-  test("addItem returns None for an unknown cart id") {
+  test("addItem returns CartNotFound for an unknown cart id") {
     withContainers { redis =>
       CartStore
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
@@ -143,7 +143,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
     }
   }
 
-  test("removeItem returns None for an unknown cart id") {
+  test("removeItem returns CartNotFound for an unknown cart id") {
     withContainers { redis =>
       CartStore
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
@@ -186,7 +186,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
     }
   }
 
-  test("setQuantity returns None for an unknown cart id") {
+  test("setQuantity returns CartNotFound for an unknown cart id") {
     withContainers { redis =>
       CartStore
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
@@ -202,7 +202,9 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
     }
   }
 
-  test("delete removes the cart and returns true, and get then returns None") {
+  test(
+    "delete removes the cart and returns Right(()), and get then returns None"
+  ) {
     withContainers { redis =>
       CartStore
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
@@ -219,7 +221,7 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
     }
   }
 
-  test("delete returns false for an unknown id") {
+  test("delete returns CartNotFound for an unknown id") {
     withContainers { redis =>
       CartStore
         .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])

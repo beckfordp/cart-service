@@ -78,7 +78,7 @@ class CartStoreSuite extends CatsEffectSuite {
     )
   }
 
-  test("addItem returns None for an unknown cart id") {
+  test("addItem returns CartNotFound for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
       result <- store.addItem(
@@ -107,7 +107,7 @@ class CartStoreSuite extends CatsEffectSuite {
     } yield assertEquals(updated.map(_.items), Right(Map("sku-1" -> 2)))
   }
 
-  test("removeItem returns None for an unknown cart id") {
+  test("removeItem returns CartNotFound for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
       result <- store.removeItem(
@@ -144,7 +144,7 @@ class CartStoreSuite extends CatsEffectSuite {
     } yield assertEquals(updated.map(_.items), Right(Map.empty[String, Int]))
   }
 
-  test("setQuantity returns None for an unknown cart id") {
+  test("setQuantity returns CartNotFound for an unknown cart id") {
     for {
       store <- CartStore.inMemory[IO]
       result <- store.setQuantity(
@@ -155,7 +155,9 @@ class CartStoreSuite extends CatsEffectSuite {
     } yield assertEquals(result, Left(CartNotFound))
   }
 
-  test("delete removes the cart and returns true, and get then returns None") {
+  test(
+    "delete removes the cart and returns Right(()), and get then returns None"
+  ) {
     for {
       store <- CartStore.inMemory[IO]
       created <- store.create()
@@ -167,7 +169,7 @@ class CartStoreSuite extends CatsEffectSuite {
     }
   }
 
-  test("delete returns false for an unknown id") {
+  test("delete returns CartNotFound for an unknown id") {
     for {
       store <- CartStore.inMemory[IO]
       deleted <- store.delete(CartId.fromUuid(UUID.randomUUID()))
