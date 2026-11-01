@@ -16,6 +16,9 @@ object Sku {
 
   val ReservedPrefix: String = "__"
 
+  /** A valid sku used in REST docs examples. */
+  val Example: Sku = "SKU-MUG-001"
+
   def parse(raw: String): Either[InvalidSku.type, Sku] =
     if (
       raw.trim.isEmpty || raw.length > MaxLength ||

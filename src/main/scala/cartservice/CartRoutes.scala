@@ -19,15 +19,26 @@ import org.http4s.HttpRoutes
 import org.typelevel.log4cats.StructuredLogger
 import sttp.model.StatusCode
 import sttp.tapir._
+import sttp.tapir.Schema.annotations.{description, encodedExample}
 import sttp.tapir.generic.auto._
 import sttp.tapir.json.circe._
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
+@description("A cart with its line items and timestamps.")
 final case class CartResponse(
+    @description("Cart id (UUID).")
+    @encodedExample("3f2b8c1e-7a4d-4e9b-9c2a-1d5e6f7a8b90")
     id: String,
+    @description(
+      "Line items: sku -> quantity (1..999 per line); empty for a new cart."
+    )
     items: Map[String, Int],
+    @description("When the cart was created (UTC).")
+    @encodedExample("2026-11-01T09:30:00Z")
     createdAt: java.time.Instant,
+    @description("When the cart last changed (UTC); a read does not bump it.")
+    @encodedExample("2026-11-01T09:45:00Z")
     updatedAt: java.time.Instant
 )
 
@@ -43,13 +54,29 @@ object CartResponse {
     )
 }
 
-final case class ErrorResponse(error: String)
+@description("Error body.")
+final case class ErrorResponse(
+    @description("Human-readable reason.") @encodedExample("Cart not found")
+    error: String
+)
 
 object ErrorResponse {
   implicit val codec: Codec[ErrorResponse] = deriveCodec
 }
 
-final case class AddItemRequest(sku: String, quantity: Int)
+@description("One line to add to a cart.")
+final case class AddItemRequest(
+    @description(
+      "Catalog sku; non-blank, at most 128 chars, never starting with `__` (reserved for cart metadata)."
+    )
+    @encodedExample("SKU-MUG-001")
+    sku: String,
+    @description(
+      "Units to add, 1..999; an add that would take the line past 999 is rejected."
+    )
+    @encodedExample(2)
+    quantity: Int
+)
 
 object AddItemRequest {
   implicit val codec: Codec[AddItemRequest] = deriveCodec
@@ -57,29 +84,85 @@ object AddItemRequest {
 
 object CartRoutes {
 
+  // REST docs convention (purerest README "Documenting endpoints"): every
+  // endpoint, parameter, DTO field and error is described, and CartDocsSuite
+  // asserts Docs.undocumented finds no gaps.
+  private val tag = "carts"
+
+  // Each fixed error's body, shared by its documented example and its real
+  // mapping.
+  private val notFound = ErrorResponse("Cart not found")
+  private val invalidQuantity = ErrorResponse("Invalid quantity")
+  private val invalidSku = ErrorResponse("Invalid sku")
+
+  private val exampleCart = CartResponse(
+    "3f2b8c1e-7a4d-4e9b-9c2a-1d5e6f7a8b90",
+    Map("SKU-MUG-001" -> 2),
+    java.time.Instant.parse("2026-11-01T09:30:00Z"),
+    java.time.Instant.parse("2026-11-01T09:45:00Z")
+  )
+
+  private def errorBody(
+      what: String,
+      example: ErrorResponse
+  ): EndpointIO.Body[String, ErrorResponse] =
+    jsonBody[ErrorResponse].description(what).example(example)
+
+  private val cartBody: EndpointIO.Body[String, CartResponse] =
+    jsonBody[CartResponse].example(exampleCart)
+
+  private val idPath: EndpointInput.PathCapture[CartId] =
+    path[CartId]("id")
+      .description("Cart id (UUID). A malformed id returns 400.")
+      .example(
+        CartId.fromUuid(
+          java.util.UUID.fromString("3f2b8c1e-7a4d-4e9b-9c2a-1d5e6f7a8b90")
+        )
+      )
+
+  private val skuPath: EndpointInput.PathCapture[Sku] =
+    path[Sku]("sku")
+      .description(
+        "Catalog sku: non-blank, at most 128 chars, never starting with `__` (reserved for cart metadata)."
+      )
+      .example(Sku.Example)
+
   private val createCartEndpoint
       : PublicEndpoint[Unit, Unit, CartResponse, Any] =
     endpoint.post
       .in("carts")
       .out(statusCode(StatusCode.Created))
-      .out(jsonBody[CartResponse])
+      .out(cartBody)
+      .summary("Create a cart")
+      .description(
+        "Creates an empty cart with a server-generated UUID and a 24h TTL (refreshed by every write). Not idempotent: each call is a new cart. No request body."
+      )
+      .tag(tag)
 
   private val notFoundOutput: EndpointOutput[CartError] =
     statusCode(StatusCode.NotFound)
-      .and(jsonBody[ErrorResponse])
-      .map[CartError](_ => CartNotFound)(_ => ErrorResponse("Cart not found"))
+      .and(errorBody("No cart with that id.", notFound))
+      .map[CartError](_ => CartNotFound)(_ => notFound)
 
   private[cartservice] val invalidQuantityOutput: EndpointOutput[CartError] =
     statusCode(StatusCode.BadRequest)
-      .and(jsonBody[ErrorResponse])
-      .map[CartError](_ => InvalidQuantity)(_ =>
-        ErrorResponse("Invalid quantity")
+      .and(
+        errorBody(
+          "Quantity outside 1..999, or an add that would take the line past 999.",
+          invalidQuantity
+        )
       )
+      .map[CartError](_ => InvalidQuantity)(_ => invalidQuantity)
 
   private val invalidSkuOutput: EndpointOutput[CartError] =
     statusCode(StatusCode.BadRequest)
-      .and(jsonBody[ErrorResponse])
-      .map[CartError](_ => InvalidSku)(_ => ErrorResponse("Invalid sku"))
+      .and(
+        errorBody(
+          "Sku blank, over 128 chars, or starting with the reserved `__` prefix.",
+          invalidSku
+        )
+      )
+      .map[CartError](_ => InvalidSku)(_ => invalidSku)
 
   private val getCartEndpoint: PublicEndpoint[
     CartId,
@@ -88,15 +171,25 @@ object CartRoutes {
     Any
   ] =
     endpoint.get
-      .in("carts" / path[CartId]("id"))
-      .out(jsonBody[CartResponse])
+      .in("carts" / idPath)
+      .out(cartBody)
       .errorOut(notFoundOutput)
+      .summary("Get a cart")
+      .description(
+        "One cart with its line items and timestamps. 404 when no such cart exists (never created, deleted, or expired by its TTL)."
+      )
+      .tag(tag)
 
   private val deleteCartEndpoint: PublicEndpoint[CartId, CartError, Unit, Any] =
     endpoint.delete
-      .in("carts" / path[CartId]("id"))
+      .in("carts" / idPath)
       .out(statusCode(StatusCode.NoContent))
       .errorOut(notFoundOutput)
+      .summary("Delete a cart")
+      .description(
+        "Hard-deletes the cart and every line. Deleting an already-absent cart → 404."
+      )
+      .tag(tag)
 
   private val addItemErrorOutput: EndpointOutput[CartError] =
     oneOf[CartError](
@@ -114,10 +207,15 @@ object CartRoutes {
     Any
   ] =
     endpoint.post
-      .in("carts" / path[CartId]("id") / "items")
-      .in(jsonBody[AddItemRequest])
-      .out(jsonBody[CartResponse])
+      .in("carts" / idPath / "items")
+      .in(jsonBody[AddItemRequest].example(AddItemRequest("SKU-MUG-001", 2)))
+      .out(cartBody)
       .errorOut(addItemErrorOutput)
+      .summary("Add an item")
+      .description(
+        "Adds the sku's line, or increments it by `quantity`. The body is validated before the cart lookup: a blank/over-long/reserved sku or a quantity outside 1..999 → 400, and an add that would take an existing line past 999 → 400, leaving the cart unchanged. Not idempotent: each call increments. 404 when the cart doesn't exist."
+      )
+      .tag(tag)
 
   private val removeItemEndpoint: PublicEndpoint[
     (CartId, Sku),
@@ -126,9 +224,14 @@ object CartRoutes {
     Any
   ] =
     endpoint.delete
-      .in("carts" / path[CartId]("id") / "items" / path[Sku]("sku"))
-      .out(jsonBody[CartResponse])
+      .in("carts" / idPath / "items" / skuPath)
+      .out(cartBody)
       .errorOut(notFoundOutput)
+      .summary("Remove an item")
+      .description(
+        "Drops the sku's line entirely, whatever its quantity; a sku not in the cart is a no-op returning the unchanged cart. The path sku is validated like a body sku (blank/over-long/reserved `__` prefix is a tapir 400 before the handler). 404 when the cart doesn't exist."
+      )
+      .tag(tag)
 
   def serverEndpoint[F[_]: MonadThrow](
       store: CartStore[F],

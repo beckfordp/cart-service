@@ -7,8 +7,42 @@ import org.http4s.implicits._
 import org.http4s.{Method, Request, Status}
 import org.typelevel.log4cats.noop.NoOpLogger
 import purerest.docs.Docs
+import sttp.tapir.EndpointOutput
+import sttp.tapir.server.ServerEndpoint
 
 class CartDocsSuite extends CatsEffectSuite {
+
+  private def servedEndpoints(
+      store: CartStore[IO]
+  ): List[ServerEndpoint[Any, IO]] = {
+    val logger = NoOpLogger[IO]
+    List(
+      CartRoutes.serverEndpoint[IO](store, logger),
+      CartRoutes.getCartServerEndpoint[IO](store, logger),
+      CartRoutes.addItemServerEndpoint[IO](store, logger),
+      CartRoutes.removeItemServerEndpoint[IO](store, logger),
+      CartRoutes.deleteCartServerEndpoint[IO](store, logger),
+      HealthRoutes.healthServerEndpoint[IO],
+      HealthRoutes.readyServerEndpoint[IO](store)
+    )
+  }
+
+  /** Every fixed status an output can produce (tapir's own traversal is
+    * internal).
+    */
+  private def statuses(output: EndpointOutput[?]): List[Int] =
+    output match {
+      case EndpointOutput.FixedStatusCode(code, _, _) => List(code.code)
+      case EndpointOutput.OneOf(variants, _)          =>
+        variants.flatMap(v => statuses(v.output))
+      case EndpointOutput.Pair(left, right, _, _) =>
+        statuses(left) ++ statuses(right)
+      case EndpointOutput.MappedPair(pair, _) => statuses(pair)
+      case _                                  => Nil
+    }
+
+  private def errorStatuses(endpoint: ServerEndpoint[Any, IO]): List[Int] =
+    statuses(endpoint.endpoint.errorOutput).sorted
 
   test(
     "the tapir-described endpoint is served and documented via purerest.docs"
@@ -29,6 +63,38 @@ class CartDocsSuite extends CatsEffectSuite {
       assert(entity.id.nonEmpty)
       assertEquals(docsResponse.status, Status.Ok)
       assert(clue(docsBody).contains("/carts"))
+    }
+  }
+
+  test("each endpoint documents only the errors it can return") {
+    for {
+      store <- CartStore.inMemory[IO]
+    } yield {
+      val endpoints = servedEndpoints(store)
+      assertEquals(
+        endpoints.map(errorStatuses),
+        List(
+          Nil, // POST /carts
+          List(404), // GET /carts/{id}
+          List(400, 400, 404), // POST /carts/{id}/items
+          List(404), // DELETE /carts/{id}/items/{sku}
+          List(404), // DELETE /carts/{id}
+          Nil, // GET /health
+          List(503) // GET /health/ready
+        )
+      )
+    }
+  }
+
+  test("every endpoint is documented") {
+    for {
+      store <- CartStore.inMemory[IO]
+    } yield {
+      val endpoints = servedEndpoints(store)
+      assertEquals(
+        Docs.undocumented(endpoints.map(_.endpoint)).map(_.render),
+        Nil
+      )
     }
   }
 }
