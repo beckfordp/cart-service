@@ -38,12 +38,12 @@ code until the user approves them (TD-20.1's rule).
 ## Out of Scope
 - Behaviour changes; exposing `setQuantity` over HTTP.
 
-## Appendix: proposed descriptions (pending approval, 2026-11-01)
+## Appendix: approved descriptions (2026-11-01)
 
-> Not yet applied to code. Tables mirror order-service's approved appendix
-> (`rest-docs_20261101`): endpoint summaries/descriptions/tags, parameters,
-> DTO fields and error variants. `Docs.undocumented` currently reports 35
-> gaps over the 7 served endpoints (RED, test uncommitted).
+> Approved by the user on 2026-11-01 and applied in Phase 3. Tables mirror
+> order-service's approved appendix (`rest-docs_20261101`): endpoint
+> summaries/descriptions/tags, parameters, DTO fields and error variants.
+> `Docs.undocumented` went from 35 gaps (RED) to 0.
 
 ### Endpoints
 

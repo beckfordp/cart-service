@@ -5,13 +5,13 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: purerestlib 0.7.3' (Protocol in workflow.md) — covered by suite (94 green incl. Redis Testcontainers; scalafmtCheckAll clean)
 
 ## Phase 2: Per-endpoint error outputs and docs coverage test
-- [~] Task: tests first — `CartDocsSuite` walks each endpoint's `errorOutput` statuses; `Docs.undocumented` over the 7 endpoints `Main` serves (red: record the gap count); narrow any remaining outputs; the red test stays uncommitted pending description approval — error outputs already narrow (TD-16.5); error-status pin green; `Docs.undocumented` red at 35 gaps; red coverage test deliberately uncommitted
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Per-endpoint error outputs and docs coverage test' (Protocol in workflow.md)
+- [x] Task: tests first — `CartDocsSuite` walks each endpoint's `errorOutput` statuses; `Docs.undocumented` over the 7 endpoints `Main` serves (red: record the gap count); narrow any remaining outputs; the red test stays uncommitted pending description approval — error outputs already narrow (TD-16.5); error-status pin green; `Docs.undocumented` red at 35 gaps; committed green with the Phase 3 work 20a1afd
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Per-endpoint error outputs and docs coverage test' (Protocol in workflow.md) — covered by suite
 
 ## Phase 3: Descriptions and examples (after user approval of the Appendix)
-- [ ] Task: coverage test first in `CartDocsSuite` (`Docs.undocumented == Nil`, red) → approved summaries/descriptions/tags, param descriptions/examples, DTO/error annotations + examples in `CartRoutes`/`HealthRoutes`; green
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Descriptions and examples' (Protocol in workflow.md)
+- [x] Task: coverage test first in `CartDocsSuite` (`Docs.undocumented == Nil`, red) → approved summaries/descriptions/tags, param descriptions/examples, DTO/error annotations + examples in `CartRoutes`/`HealthRoutes`; green — red 35 gaps → 0; body examples on every request/response, shared fixed error bodies; 96/96 green 20a1afd
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Descriptions and examples' (Protocol in workflow.md) — covered by Phase 4's verify script
 
 ## Phase 4: Smoke test
-- [ ] Task: `scripts/verify-rest-docs.sh` — run service, fetch `/docs/docs.yaml`, assert summaries/descriptions/examples + narrowed errors; scalafmtCheck; CI green
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Smoke test' (Protocol in workflow.md)
+- [x] Task: `scripts/verify-rest-docs.sh` — run service, fetch `/docs/docs.yaml`, assert summaries/descriptions/examples + narrowed errors; scalafmtCheck; CI green — PASS 43 checks; scalafmtCheckAll clean f243458
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Smoke test' (Protocol in workflow.md) — `scripts/verify-rest-docs.sh` PASS
