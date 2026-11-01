@@ -1,0 +1,1 @@
+Phase 2 verification: sbt scalafmtCheckAll scalafmtSbtCheck test -> 89/89 passed incl. Redis Testcontainers. Reserved/blank sku and over-limit routes covered in CartRoutesSuite; live Redis-side atomicity is Phase 3. Prompting off: suite is the manual verification.
