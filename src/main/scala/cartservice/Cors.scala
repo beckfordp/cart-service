@@ -5,18 +5,18 @@ import org.http4s.{HttpRoutes, Method}
 import org.http4s.server.middleware.CORS
 import org.typelevel.ci._
 
-/** CORS policy for a freshly generated service: allow all origins (no frontend
-  * origin decided yet at generation time), restricted to the methods/headers
-  * this template's own routes actually use, credentials disallowed (required
-  * anyway alongside an allow-all-origins policy — browsers reject credentialed
-  * requests against a wildcard origin).
+/** CORS policy: allow all origins (gshop's origin varies per environment),
+  * restricted to the methods/headers the cart routes actually use (GET, POST,
+  * DELETE; `Content-Type`), credentials disallowed (required anyway alongside
+  * an allow-all-origins policy — browsers reject credentialed requests against
+  * a wildcard origin).
   */
 object Cors {
 
   def middleware[F[_]: Monad](routes: HttpRoutes[F]): HttpRoutes[F] =
     CORS.policy.withAllowOriginAll
       .withAllowMethodsIn(
-        Set(Method.GET, Method.POST, Method.PATCH, Method.PUT, Method.DELETE)
+        Set(Method.GET, Method.POST, Method.DELETE)
       )
       .withAllowHeadersIn(Set(ci"Content-Type"))
       .withAllowCredentials(false)

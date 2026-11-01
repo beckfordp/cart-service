@@ -57,4 +57,23 @@ class CorsSuite extends CatsEffectSuite {
       None
     )
   }
+
+  test("preflight allows exactly the methods the cart routes serve") {
+    val request = Request[IO](Method.OPTIONS, uri"/carts")
+      .putHeaders(
+        Header.Raw(ci"Origin", "http://example.com"),
+        Header.Raw(ci"Access-Control-Request-Method", "DELETE")
+      )
+    for {
+      response <- corsRoutes.orNotFound.run(request)
+    } yield {
+      val allowed = response.headers
+        .get(ci"Access-Control-Allow-Methods")
+        .toList
+        .flatMap(_.toList)
+        .flatMap(_.value.split(",").map(_.trim))
+        .toSet
+      assertEquals(allowed, Set("GET", "POST", "DELETE"))
+    }
+  }
 }

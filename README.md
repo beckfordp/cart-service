@@ -20,33 +20,31 @@ Its own `build.sbt` resolves `purerestlib` as a published GitHub Packages depend
 export GITHUB_ACTOR=<your-github-username>
 export GITHUB_TOKEN=<your-PAT-with-read:packages>
 
-docker compose up -d   # starts Postgres
-sbt run                # runs migrations, then starts the service on :8080
+docker compose up -d   # starts Redis (cart data is ephemeral, no volume)
+sbt run                # starts the service on :8080
 ```
 
 Then, in another terminal:
 
 ```
-# Create a cart
-curl -X POST http://localhost:8080/carts \
-  -H "Content-Type: application/json" -d '{"item":"widget","quantity":3}'
+# Create an empty cart (no request body)
+curl -X POST http://localhost:8080/carts
 
 # Read it back (substitute the id from the response above)
 curl http://localhost:8080/carts/<id>
 
-# Partially update it (quantity/status)
-curl -X PATCH http://localhost:8080/carts/<id> \
-  -H "Content-Type: application/json" -d '{"quantity":5,"status":"shipped"}'
+# Add an item (adds to the line if the sku is already in the cart;
+# quantity 1..999 per request and per line)
+curl -X POST http://localhost:8080/carts/<id>/items \
+  -H "Content-Type: application/json" -d '{"sku":"SKU-MUG-001","quantity":2}'
 
-# Or fully replace it (same required fields as PATCH — this resource has no
-# other client-writable ones — but PUT is idempotent full-replace semantics)
-curl -X PUT http://localhost:8080/carts/<id> \
-  -H "Content-Type: application/json" -d '{"quantity":5,"status":"shipped"}'
+# Remove a line entirely (no-op if the sku isn't in the cart)
+curl -X DELETE http://localhost:8080/carts/<id>/items/SKU-MUG-001
 
-# Delete it
+# Delete the whole cart
 curl -X DELETE http://localhost:8080/carts/<id>
 
-# Liveness / readiness
+# Liveness / readiness (ready = Redis reachable)
 curl http://localhost:8080/health
 curl http://localhost:8080/health/ready
 ```
@@ -66,18 +64,15 @@ avoid) — before adding new code.
 sbt scalafmtCheck test
 ```
 
-Unit tests use an in-memory `CartStore`; Postgres-backed tests spin up a
-real, ephemeral container via Testcontainers — no local Postgres or manual setup needed to run
-`sbt test`.
+Unit tests use an in-memory `CartStore`; `CartStoreRedisSuite` spins up a real, ephemeral Redis
+container via Testcontainers — no local Redis or manual setup needed to run `sbt test`.
 
-## One database per service
+## Storage
 
-This service owns a single dedicated Postgres database, named after its domain: a database named
-`cart` (singular), with a `cart` table (quoted throughout in SQL — several
-plausible domain names, e.g. "user"/"group"/"order", are reserved PostgreSQL keywords). REST
-paths stay pluralized (`/carts`, `/carts/{id}`) per ordinary
-resource-collection convention; only the database/table naming reflects the one-db-per-service
-rule. No service reads or writes another service's database directly.
+Redis only (no Postgres): one hash per cart at `cart:<id>` (field = sku, value = quantity, plus
+the reserved `__created_at`/`__updated_at` fields — skus may not start with `__`), with a TTL
+(24h default, `CART_TTL_SECONDS`) refreshed on every write. Each write is a single Lua script, so
+it is atomic. No other service reads or writes this Redis.
 
 ## Calling other services with resilience
 

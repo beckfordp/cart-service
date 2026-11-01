@@ -10,7 +10,7 @@
 - circe 0.14.16
 - CORS — `org.http4s.server.middleware.CORS` (ships in `http4s-server`, no new
   dependency) wraps every response (`Cors.scala`). Allow all origins, methods
-  limited to this service's five CRUD routes, `Content-Type` header allowed,
+  limited to the ones the cart routes serve (GET/POST/DELETE), `Content-Type` header allowed,
   credentials disallowed. Ported from `pure-service-generator`'s
   `cors_20261010` track (TD-1.2).
 
@@ -22,13 +22,15 @@
 - redis4cats-effects / redis4cats-log4cats 2.0.6 — cats-effect-native Redis
   client, this service's only persistence layer (no Postgres anywhere — per
   `gluon/docs/system-design.md`, cart-service is **Redis only**).
-  `RedisConfig(uri, ttlSeconds)` loaded via PureConfig.
+  `RedisConfig(uri, ttlSeconds)` loaded via PureConfig. Every write is a
+  single Lua `EVAL` (atomic: existence check, write, `__updated_at`, TTL,
+  read-back) — 2026-11-01, `cart-review-fixes_20261101`.
 
 ## Config
 - pureconfig 0.17.10 — typed config from `application.conf`
 
 ## Shared platform library
-- `purerestlib` 0.1.0 (`io.github.beckfordp`) — tracing, structured logging,
+- `purerestlib` 0.4.0 (`io.github.beckfordp`) — tracing, structured logging,
   metrics, resilience (retry + circuit breaker), tapir-based docs. Consumed
   as a published GitHub Packages artifact, never vendored/`.dependsOn`.
   ADR 0005 flags a possible future migration off GitHub Packages (JitPack or
