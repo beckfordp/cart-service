@@ -14,18 +14,8 @@ class CartDocsSuite extends CatsEffectSuite {
 
   private def servedEndpoints(
       store: CartStore[IO]
-  ): List[ServerEndpoint[Any, IO]] = {
-    val logger = NoOpLogger[IO]
-    List(
-      CartRoutes.serverEndpoint[IO](store, logger),
-      CartRoutes.getCartServerEndpoint[IO](store, logger),
-      CartRoutes.addItemServerEndpoint[IO](store, logger),
-      CartRoutes.removeItemServerEndpoint[IO](store, logger),
-      CartRoutes.deleteCartServerEndpoint[IO](store, logger),
-      HealthRoutes.healthServerEndpoint[IO],
-      HealthRoutes.readyServerEndpoint[IO](store)
-    )
-  }
+  ): List[ServerEndpoint[Any, IO]] =
+    Main.endpoints[IO](store, NoOpLogger[IO])
 
   /** Every fixed status an output can produce (tapir's own traversal is
     * internal).

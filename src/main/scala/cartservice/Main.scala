@@ -1,15 +1,35 @@
 package cartservice
 
+import cats.MonadThrow
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s._
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits._
+import org.typelevel.log4cats.StructuredLogger
 import purerest.docs.Docs
 import purerest.logging.Logging
 import purerest.metrics.{Metrics, ServerMetrics}
 import purerest.tracing.{ServerTracing, Tracing}
+import sttp.tapir.server.ServerEndpoint
 
 object Main extends IOApp.Simple {
+
+  /** The endpoints `Docs.routes` serves the spec for - the same list the
+    * running service is built from, and what `CartDocsSuite` checks.
+    */
+  private[cartservice] def endpoints[F[_]: MonadThrow](
+      store: CartStore[F],
+      logger: StructuredLogger[F]
+  ): List[ServerEndpoint[Any, F]] =
+    List(
+      CartRoutes.serverEndpoint[F](store, logger),
+      CartRoutes.getCartServerEndpoint[F](store, logger),
+      CartRoutes.addItemServerEndpoint[F](store, logger),
+      CartRoutes.removeItemServerEndpoint[F](store, logger),
+      CartRoutes.deleteCartServerEndpoint[F](store, logger),
+      HealthRoutes.healthServerEndpoint[F],
+      HealthRoutes.readyServerEndpoint[F](store)
+    )
 
   val run: IO[Unit] =
     for {
@@ -35,15 +55,7 @@ object Main extends IOApp.Simple {
                   val docsRoutes = Docs.routes[IO](
                     "Cart Service",
                     "1.0",
-                    List(
-                      CartRoutes.serverEndpoint[IO](store, logger),
-                      CartRoutes.getCartServerEndpoint[IO](store, logger),
-                      CartRoutes.addItemServerEndpoint[IO](store, logger),
-                      CartRoutes.removeItemServerEndpoint[IO](store, logger),
-                      CartRoutes.deleteCartServerEndpoint[IO](store, logger),
-                      HealthRoutes.healthServerEndpoint[IO],
-                      HealthRoutes.readyServerEndpoint[IO](store)
-                    )
+                    endpoints[IO](store, logger)
                   )
                   val tracedRoutes =
                     ServerTracing.middleware(tracer)(docsRoutes)
