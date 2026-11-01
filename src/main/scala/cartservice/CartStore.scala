@@ -1,11 +1,20 @@
 package cartservice
 
-import cats.effect.{Async, Clock, Concurrent, Ref, Resource, Sync}
+import cats.effect.{Async, Clock, Concurrent, Ref, Resource}
 import cats.effect.std.UUIDGen
 import cats.syntax.all._
-import cartservice.domain.{Cart, CartError, CartId, CartNotFound, Quantity, Sku}
+import cartservice.domain.{
+  Cart,
+  CartError,
+  CartId,
+  CartNotFound,
+  InvalidQuantity,
+  Quantity,
+  Sku
+}
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.effect.{Log, MkRedis}
+import dev.profunktor.redis4cats.effects.ScriptOutputType
 import dev.profunktor.redis4cats.log4cats.log4CatsInstance
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.otel4s.Attribute
@@ -13,7 +22,8 @@ import org.typelevel.otel4s.metrics.Meter
 import purerest.metrics.LatencyBuckets
 
 import java.time.Instant
-import scala.concurrent.duration.{FiniteDuration, SECONDS}
+import java.time.format.DateTimeParseException
+import scala.concurrent.duration.SECONDS
 
 trait CartStore[F[_]] {
   def create(): F[Cart]
@@ -101,23 +111,102 @@ object CartStore {
   private val createdAtField = "__created_at"
   private val updatedAtField = "__updated_at"
 
-  private def keyFor(id: CartId): String = s"cart:$id"
+  private def keyFor(id: CartId): String = s"cart:${CartId.render(id)}"
 
-  private def parseCart(id: CartId, fields: Map[String, String]): Option[Cart] =
+  private def instantField(
+      fields: Map[String, String],
+      name: String
+  ): Either[String, Instant] =
+    fields
+      .get(name)
+      .toRight(s"missing $name")
+      .flatMap(raw =>
+        Either
+          .catchOnly[DateTimeParseException](Instant.parse(raw))
+          .leftMap(_ => s"$name is not an instant: '$raw'")
+      )
+
+  private[cartservice] def parseCart(
+      id: CartId,
+      fields: Map[String, String]
+  ): Either[String, Cart] =
     for {
-      createdAtStr <- fields.get(createdAtField)
-      updatedAtStr <- fields.get(updatedAtField)
-      createdAt <- scala.util.Try(Instant.parse(createdAtStr)).toOption
-      updatedAt <- scala.util.Try(Instant.parse(updatedAtStr)).toOption
-      items <- (fields - createdAtField - updatedAtField)
-        .foldLeft(Option(Map.empty[String, Int])) {
-          case (acc, (sku, quantity)) =>
-            for {
-              soFar <- acc
-              parsedQuantity <- scala.util.Try(quantity.toInt).toOption
-            } yield soFar + (sku -> parsedQuantity)
+      createdAt <- instantField(fields, createdAtField)
+      updatedAt <- instantField(fields, updatedAtField)
+      items <- (fields - createdAtField - updatedAtField).toList
+        .traverse { case (sku, raw) =>
+          raw.toIntOption
+            .toRight(s"quantity of '$sku' is not an Int: '$raw'")
+            .map(sku -> _)
         }
-    } yield Cart(id, items, createdAt, updatedAt)
+    } yield Cart(id, items.toMap, createdAt, updatedAt)
+
+  /** Every write is one Lua script, so Redis runs it atomically: no partial
+    * write, no TTL-less key, and no resurrecting a cart deleted (or expired)
+    * mid-operation. ARGV[1] = updatedAt field, ARGV[2] = now, ARGV[3] = TTL
+    * seconds, then the operation's own arguments. Each returns `{'missing'}`,
+    * `{'limit'}` or `{'ok', field1, value1, ...}` (the whole hash after the
+    * write) - never nil, which redis4cats' `Multi` output can't represent.
+    */
+  private def mutationScript(write: String): String =
+    s"""if redis.call('EXISTS', KEYS[1]) == 0 then return {'missing'} end
+       |$write
+       |redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+       |redis.call('EXPIRE', KEYS[1], ARGV[3])
+       |local fields = redis.call('HGETALL', KEYS[1])
+       |table.insert(fields, 1, 'ok')
+       |return fields""".stripMargin
+
+  /** ARGV[4] = sku, ARGV[5] = quantity to add, ARGV[6] = the core's
+    * [[Quantity.Max]]: the line limit is checked atomically here, but its value
+    * comes from the pure core.
+    */
+  private val addItemScript: String = mutationScript(
+    """local total = tonumber(redis.call('HGET', KEYS[1], ARGV[4]) or '0') + tonumber(ARGV[5])
+      |if total > tonumber(ARGV[6]) then return {'limit'} end
+      |redis.call('HSET', KEYS[1], ARGV[4], tostring(total))""".stripMargin
+  )
+
+  /** ARGV[4] = sku. */
+  private val removeItemScript: String =
+    mutationScript("redis.call('HDEL', KEYS[1], ARGV[4])")
+
+  /** ARGV[4] = sku, ARGV[5] = quantity. */
+  private val setQuantityScript: String =
+    mutationScript("redis.call('HSET', KEYS[1], ARGV[4], ARGV[5])")
+
+  /** ARGV[1] = createdAt field, ARGV[2] = updatedAt field, ARGV[3] = now,
+    * ARGV[4] = TTL seconds: the hash and its TTL land together.
+    */
+  private val createScript: String =
+    """redis.call('HSET', KEYS[1], ARGV[1], ARGV[3], ARGV[2], ARGV[3])
+      |redis.call('EXPIRE', KEYS[1], ARGV[4])
+      |return {'ok'}""".stripMargin
+
+  private enum Mutation {
+    case Applied(fields: Map[String, String])
+    case Missing
+    case OverLimit
+  }
+
+  private def mutationResult(
+      id: CartId,
+      reply: List[String]
+  ): Either[String, Mutation] =
+    reply match {
+      case "ok" :: fields =>
+        val pairs = fields.grouped(2).toList
+        pairs
+          .traverse {
+            case List(field, value) => Right(field -> value)
+            case odd                => Left(s"odd HGETALL reply: $odd")
+          }
+          .map(kvs => Mutation.Applied(kvs.toMap))
+      case List("missing") => Right(Mutation.Missing)
+      case List("limit")   => Right(Mutation.OverLimit)
+      case other           =>
+        Left(s"unexpected script reply for ${CartId.render(id)}: $other")
+    }
 
   def redis[F[_]: Async](
       config: RedisConfig,
@@ -126,7 +215,7 @@ object CartStore {
   ): Resource[F, CartStore[F]] = {
     given Log[F] = log4CatsInstance(using logger)
     given MkRedis[F] = MkRedis.forAsync[F]
-    val ttl = FiniteDuration(config.ttlSeconds.toLong, SECONDS)
+    val ttlSeconds = config.ttlSeconds.toString
 
     Redis[F].utf8(config.uri).evalMap { commands =>
       meter
@@ -155,107 +244,102 @@ object CartStore {
               a <- result.liftTo[F]
             } yield a
 
-          new CartStore[F] {
-            private def getCart(id: CartId): F[Option[Cart]] =
-              timed("hgetall") {
-                commands.hGetAll(keyFor(id)).map { fields =>
-                  if (fields.isEmpty) None else parseCart(id, fields)
-                }
-              }
+          def toCart(id: CartId, fields: Map[String, String]): F[Cart] =
+            parseCart(id, fields).leftMap(CorruptCart(id, _)).liftTo[F]
 
-            private def mutateIfExists(
-                id: CartId,
-                operation: String
-            )(mutate: F[Unit]): F[Option[Cart]] = {
-              val key = keyFor(id)
-              for {
-                existsAlready <- timed("exists")(commands.exists(key))
-                result <-
-                  if (!existsAlready) Sync[F].pure(None)
-                  else
-                    for {
-                      now <- Sync[F].realTimeInstant
-                      _ <- timed(operation)(mutate)
-                      _ <- commands.hSet(key, updatedAtField, now.toString)
-                      _ <- commands.expire(key, ttl)
-                      updated <- getCart(id)
-                      // Defensive cleanup: if a concurrent delete raced this
-                      // operation (landed between the exists check above and
-                      // the hSet touch just now), that hSet would have
-                      // resurrected an empty hash with only an updatedAt
-                      // field - getCart returns None for it (no createdAt),
-                      // but the key would otherwise linger until its TTL
-                      // expires. Clean it up immediately instead.
-                      _ <-
-                        if (updated.isEmpty) commands.del(key).void
-                        else Sync[F].unit
-                    } yield updated
-              } yield result
+          /** Runs a mutation script and parses its reply. */
+          def run(id: CartId, operation: String, script: String)(
+              args: String*
+          ): F[Mutation] =
+            Clock[F].realTimeInstant.flatMap { now =>
+              timed(operation) {
+                commands.eval(
+                  script,
+                  ScriptOutputType.Multi[String],
+                  List(keyFor(id)),
+                  List(updatedAtField, now.toString, ttlSeconds) ++ args
+                )
+              }.flatMap(
+                mutationResult(id, _).leftMap(CorruptCart(id, _)).liftTo[F]
+              )
             }
 
+          /** For the scripts that never return `limit` (only add does). */
+          def mutateExisting(id: CartId, operation: String, script: String)(
+              args: String*
+          ): F[Either[CartNotFound.type, Cart]] =
+            run(id, operation, script)(args*).flatMap {
+              case Mutation.Applied(fields) => toCart(id, fields).map(Right(_))
+              case Mutation.Missing         => Async[F].pure(Left(CartNotFound))
+              case Mutation.OverLimit       =>
+                Async[F].raiseError(
+                  CorruptCart(id, s"unexpected limit reply to $operation")
+                )
+            }
+
+          new CartStore[F] {
             def create(): F[Cart] =
               for {
                 id <- UUIDGen[F].randomUUID.map(CartId.fromUuid)
                 now <- Clock[F].realTimeInstant
-                key = keyFor(id)
-                _ <- timed("hset") {
-                  commands.hSet(
-                    key,
-                    Map(
-                      createdAtField -> now.toString,
-                      updatedAtField -> now.toString
+                _ <- timed("create") {
+                  commands.eval(
+                    createScript,
+                    ScriptOutputType.Multi[String],
+                    List(keyFor(id)),
+                    List(
+                      createdAtField,
+                      updatedAtField,
+                      now.toString,
+                      ttlSeconds
                     )
                   )
                 }
-                _ <- commands.expire(key, ttl)
               } yield Cart.empty(id, now)
 
-            def get(id: CartId): F[Option[Cart]] = getCart(id)
+            def get(id: CartId): F[Option[Cart]] =
+              timed("hgetall")(commands.hGetAll(keyFor(id))).flatMap { fields =>
+                if (fields.isEmpty) Async[F].pure(None)
+                else toCart(id, fields).map(Some(_))
+              }
 
             def addItem(
                 id: CartId,
                 sku: Sku,
                 quantity: Quantity
             ): F[Either[CartError, Cart]] =
-              mutateIfExists(id, "hincrby") {
-                commands
-                  .hIncrBy(
-                    keyFor(id),
-                    Sku.value(sku),
-                    Quantity.value(quantity).toLong
-                  )
-                  .void
-              }.map(_.toRight(CartNotFound))
+              run(id, "add_item", addItemScript)(
+                Sku.value(sku),
+                Quantity.value(quantity).toString,
+                Quantity.Max.toString
+              ).flatMap {
+                case Mutation.Applied(fields) =>
+                  toCart(id, fields).map(Right(_))
+                case Mutation.Missing   => Async[F].pure(Left(CartNotFound))
+                case Mutation.OverLimit => Async[F].pure(Left(InvalidQuantity))
+              }
 
             def removeItem(
                 id: CartId,
                 sku: Sku
             ): F[Either[CartNotFound.type, Cart]] =
-              mutateIfExists(id, "hdel") {
-                commands.hDel(keyFor(id), Sku.value(sku)).void
-              }.map(_.toRight(CartNotFound))
+              mutateExisting(id, "remove_item", removeItemScript)(
+                Sku.value(sku)
+              )
 
             def setQuantity(
                 id: CartId,
                 sku: Sku,
                 target: Option[Quantity]
             ): F[Either[CartNotFound.type, Cart]] =
-              (target match {
-                case None =>
-                  mutateIfExists(id, "hdel") {
-                    commands.hDel(keyFor(id), Sku.value(sku)).void
-                  }
+              target match {
+                case None           => removeItem(id, sku)
                 case Some(quantity) =>
-                  mutateIfExists(id, "hset") {
-                    commands
-                      .hSet(
-                        keyFor(id),
-                        Sku.value(sku),
-                        Quantity.value(quantity).toString
-                      )
-                      .void
-                  }
-              }).map(_.toRight(CartNotFound))
+                  mutateExisting(id, "set_quantity", setQuantityScript)(
+                    Sku.value(sku),
+                    Quantity.value(quantity).toString
+                  )
+              }
 
             def delete(id: CartId): F[Either[CartNotFound.type, Unit]] =
               timed("del")(commands.del(keyFor(id))).map { removed =>
@@ -270,3 +354,11 @@ object CartStore {
     }
   }
 }
+
+/** A stored cart that no longer parses (bad timestamp or quantity) - an
+  * environment failure, surfaced as a 500, never read as a missing cart.
+  */
+final case class CorruptCart(id: CartId, reason: String)
+    extends RuntimeException(
+      s"Cart ${CartId.render(id)} is corrupt in Redis: $reason"
+    )

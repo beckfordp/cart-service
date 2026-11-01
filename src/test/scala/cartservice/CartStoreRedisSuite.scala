@@ -1,6 +1,7 @@
 package cartservice
 
 import cats.effect.IO
+import cats.syntax.all._
 import com.dimafeng.testcontainers.RedisContainer
 import com.dimafeng.testcontainers.munit.TestContainerForAll
 import dev.profunktor.redis4cats.Redis
@@ -226,6 +227,109 @@ class CartStoreRedisSuite extends CatsEffectSuite with TestContainerForAll {
           store
             .delete(CartId.fromUuid(UUID.randomUUID()))
             .map(deleted => assertEquals(deleted, Left(CartNotFound)))
+        }
+    }
+  }
+
+  test("addItem past Quantity.Max is InvalidQuantity and leaves the line") {
+    withContainers { redis =>
+      CartStore
+        .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
+        .use { store =>
+          for {
+            created <- store.create()
+            _ <- store.addItem(created.id, sku("sku-1"), qty(Quantity.Max))
+            over <- store.addItem(created.id, sku("sku-1"), qty(1))
+            after <- store.get(created.id)
+          } yield {
+            assertEquals(over, Left(InvalidQuantity))
+            assertEquals(after.map(_.items), Some(Map("sku-1" -> Quantity.Max)))
+          }
+        }
+    }
+  }
+
+  private def rawRedis(redis: RedisContainer) = {
+    given Log[IO] = log4CatsInstance(using NoOpLogger[IO])
+    given MkRedis[IO] = MkRedis.forAsync[IO]
+    Redis[IO].utf8(redis.redisUri)
+  }
+
+  test("a corrupt cart hash raises CorruptCart and is left in place") {
+    withContainers { redis =>
+      val id = CartId.fromUuid(UUID.randomUUID())
+      val key = s"cart:${CartId.render(id)}"
+      for {
+        _ <- rawRedis(redis).use(
+          _.hSet(
+            key,
+            Map(
+              "__created_at" -> "not-an-instant",
+              "__updated_at" -> "2026-11-01T00:00:00Z",
+              "sku-1" -> "1"
+            )
+          )
+        )
+        result <- CartStore
+          .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
+          .use(store =>
+            (
+              store.get(id).attempt,
+              store.addItem(id, sku("sku-1"), qty(1)).attempt
+            ).tupled
+          )
+        stillThere <- rawRedis(redis).use(_.exists(key))
+      } yield {
+        assert(
+          result._1.left.exists(_.isInstanceOf[CorruptCart]),
+          s"get: expected CorruptCart, got ${result._1}"
+        )
+        assert(
+          result._2.left.exists(_.isInstanceOf[CorruptCart]),
+          s"addItem: expected CorruptCart, got ${result._2}"
+        )
+        assert(stillThere, "corrupt cart must not be deleted")
+      }
+    }
+  }
+
+  test("a write to a missing cart creates no key") {
+    withContainers { redis =>
+      val id = CartId.fromUuid(UUID.randomUUID())
+      for {
+        results <- CartStore
+          .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
+          .use(store =>
+            (
+              store.addItem(id, sku("sku-1"), qty(1)),
+              store.removeItem(id, sku("sku-1")),
+              store.setQuantity(id, sku("sku-1"), target(2))
+            ).tupled
+          )
+        exists <- rawRedis(redis).use(_.exists(s"cart:${CartId.render(id)}"))
+      } yield {
+        assertEquals(
+          results,
+          (Left(CartNotFound), Left(CartNotFound), Left(CartNotFound))
+        )
+        assert(!exists)
+      }
+    }
+  }
+
+  test("setQuantity with a negative value removes the sku") {
+    withContainers { redis =>
+      CartStore
+        .redis[IO](configFor(redis), Meter.noop[IO], NoOpLogger[IO])
+        .use { store =>
+          for {
+            created <- store.create()
+            _ <- store.addItem(created.id, sku("sku-1"), qty(3))
+            updated <- store.setQuantity(created.id, sku("sku-1"), target(-1))
+          } yield assertEquals(
+            updated.map(_.items),
+            Right(Map.empty[String, Int])
+          )
         }
     }
   }
