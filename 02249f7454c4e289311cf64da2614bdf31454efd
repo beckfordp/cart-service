@@ -1,0 +1,1 @@
+Phase 3 verification: sbt scalafmtCheckAll scalafmtSbtCheck test -> 93/93 passed; CartStoreRedisSuite runs the Lua scripts against a real redis container (over-limit, corrupt hash, missing-cart writes, TTL refresh). Live end-to-end scripts run in Phase 4.
