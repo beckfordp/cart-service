@@ -12,7 +12,7 @@
 - [x] Task: tests first — Redis suite: over-limit add leaves the line unchanged; reserved/odd sku never deletes the cart; corrupt hash raises `CorruptCart` and is not deleted; write to a missing cart leaves no key; red → Lua scripts for create/add/remove/set, typed parse, cleanup removed; green — red: over-limit + corrupt-hash failed against old store; 93/93 green ebe93bd
 - [x] Task: Conductor - User Manual Verification 'Phase 3: Atomic Redis writes' (Protocol in workflow.md) — covered by suite (93 green, real Redis via Testcontainers)
 
-## Phase 4: Low-severity cleanup (FR-4)
+## Phase 4: Low-severity cleanup (FR-4) [checkpoint: 47dacd4]
 - [x] Task: CORS methods narrowed (test first); README rewritten; tech-stack purerestlib synced — preflight test pins GET/POST/DELETE only; README rewritten for the Redis-backed real routes; tech-stack purerestlib 0.4.0 + Lua atomicity noted; 94/94 green bbd79a8
 - [x] Task: Conductor - User Manual Verification 'Phase 4: Low-severity cleanup' (Protocol in workflow.md) — covered by suite (94 green incl. Redis Testcontainers; scalafmtCheckAll clean)
 
