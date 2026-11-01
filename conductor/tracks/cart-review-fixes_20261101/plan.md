@@ -9,7 +9,7 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Typed store and boundary parsing' (Protocol in workflow.md) — covered by suite (89 green)
 
 ## Phase 3: Atomic Redis writes (FR-3)
-- [ ] Task: tests first — Redis suite: over-limit add leaves the line unchanged; reserved/odd sku never deletes the cart; corrupt hash raises `CorruptCart` and is not deleted; write to a missing cart leaves no key; red → Lua scripts for create/add/remove/set, typed parse, cleanup removed; green
+- [x] Task: tests first — Redis suite: over-limit add leaves the line unchanged; reserved/odd sku never deletes the cart; corrupt hash raises `CorruptCart` and is not deleted; write to a missing cart leaves no key; red → Lua scripts for create/add/remove/set, typed parse, cleanup removed; green — red: over-limit + corrupt-hash failed against old store; 93/93 green ebe93bd
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Atomic Redis writes' (Protocol in workflow.md)
 
 ## Phase 4: Low-severity cleanup (FR-4)
