@@ -40,8 +40,13 @@ object Main extends IOApp.Simple {
         )
       )
       _ <- Tracing.console[IO](config.serviceName).use { tracer =>
-        Metrics.oteljava[IO](config.serviceName, config.metricsPort).use {
-          meter =>
+        Metrics
+          .oteljava[IO](
+            config.serviceName,
+            config.metricsPort,
+            Some(runtime.metrics)
+          )
+          .use { meter =>
             for {
               logger <- Logging.create[IO](tracer, config.serviceName)
               _ <- logger.info(
@@ -50,8 +55,10 @@ object Main extends IOApp.Simple {
                   "metrics_port" -> config.metricsPort.toString
                 )
               )("cart-service starting")
-              _ <- CartStore.redis[IO](config.redis, meter, logger).use {
-                store =>
+              _ <- CartStore
+                .redis[IO](config.redis, meter, logger)
+                .evalMap(CartJourneyMetrics.instrument[IO](_, meter))
+                .use { store =>
                   val docsRoutes = Docs.routes[IO](
                     "Cart Service",
                     "1.0",
@@ -69,9 +76,9 @@ object Main extends IOApp.Simple {
                     .withHttpApp(routes.orNotFound)
                     .build
                     .useForever
-              }
+                }
             } yield ()
-        }
+          }
       }
     } yield ()
 }
