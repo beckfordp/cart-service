@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Verifies Phase 3 (final) of redis-cart-model_20261002: cart-service wired end to

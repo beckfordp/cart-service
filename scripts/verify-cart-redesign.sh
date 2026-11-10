@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Verifies Phase 1 of redis-cart-model_20261002 (redesign Cart as line items, drop

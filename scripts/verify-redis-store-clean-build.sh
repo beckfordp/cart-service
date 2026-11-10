@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Verifies Phase 2 of redis-cart-model_20261002 (Redis-backed CartStore

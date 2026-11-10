@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice
 
 import cartservice.domain.{

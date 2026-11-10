@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Verifies Phase 1 of cart-items_20261002 (Error ADT + CartResponse items field):

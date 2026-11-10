@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice.domain
 
 import sttp.tapir.{Codec, CodecFormat, DecodeResult, Schema}

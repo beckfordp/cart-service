@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice.domain
 
 /** A cart line's quantity: 1..[[Quantity.Max]]. The cap keeps a line inside

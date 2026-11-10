@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice.domain
 
 import java.time.Instant

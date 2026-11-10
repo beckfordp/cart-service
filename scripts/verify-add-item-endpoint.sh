@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Verifies Phase 2 of cart-items_20261002 (POST /carts/{id}/items): CartRoutesSuite

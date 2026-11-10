@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice.examples
 
 import cats.effect.{IO, Ref, Resource}

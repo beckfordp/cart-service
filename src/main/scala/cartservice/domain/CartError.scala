@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package cartservice.domain
 
 /** Expected, nameable cart failures, carried in `Either` from detection to the
